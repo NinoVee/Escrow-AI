@@ -41,3 +41,21 @@ body {
   white-space: nowrap;
   border: 0;
 }
+
+@media print {
+  aside,
+  header,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .lg\:pl-60 {
+    padding-left: 0 !important;
+  }
+}

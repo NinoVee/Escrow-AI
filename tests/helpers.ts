@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { userCtx, type Ctx } from "@/server/context";
 import { createUserWithPassword } from "@/server/services/users";
 import { installDefaultTemplates } from "@/server/services/templates";
+import { installDefaultLedger } from "@/server/services/reconciliation";
 import { createTransaction, type CreateTransactionInput } from "@/server/services/transactions";
 import { parseSettings } from "@/server/settings";
 import type { Role } from "@/generated/prisma/enums";
@@ -21,7 +22,10 @@ export async function resetDb() {
 export async function makeCompany(name = "Test Escrow Co") {
   const company = await db.company.create({ data: { name, slug: `${name.toLowerCase().replace(/\W+/g, "-")}-${randomUUID().slice(0, 6)}`, settings: parseSettings({}) as object } });
   const admin = await makeUser(company.id, "COMPANY_ADMIN");
-  await db.$transaction((client) => installDefaultTemplates(client, company.id, admin.userId));
+  await db.$transaction(async (client) => {
+    await installDefaultTemplates(client, company.id, admin.userId);
+    await installDefaultLedger(client, company.id, { name: "Trust account", bankName: "Test Bank", last4: "0001" });
+  });
   return { company, admin };
 }
 

@@ -206,7 +206,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
                     </div>
                   )}
                   {m?.notes && <div className="mt-1 text-xs text-slate-500">{m.notes}</div>}
-                  {hasPermission(ctx, "milestone.update") && tx.status === "ACTIVE" && (kind !== "FUNDING" || hasPermission(ctx, "milestone.confirm_funding")) && (
+                  {tx.status === "ACTIVE" && (hasPermission(ctx, "milestone.update") || (kind === "FUNDING" && hasPermission(ctx, "milestone.confirm_funding"))) && (
                     <details className="mt-2">
                       <summary className="cursor-pointer text-sm text-brand-700">Update</summary>
                       <ActionForm action={milestoneAction.bind(null, tx.id, kind)} submitLabel="Save milestone" size="sm" className="mt-2">

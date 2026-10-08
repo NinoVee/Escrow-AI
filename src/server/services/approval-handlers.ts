@@ -64,3 +64,33 @@ registerApprovalHandler("SIGNING_AUTHORITY", {
     });
   },
 });
+
+registerApprovalHandler("DISBURSEMENT", {
+  async currentBinding(client, approval) {
+    const d = await client.disbursement.findUnique({ where: { id: approval.subjectId } });
+    if (!d || d.status !== "PENDING_APPROVAL") return null;
+    const { disbursementBinding } = await import("./payments");
+    return disbursementBinding(client, d);
+  },
+  async within(client, ctx, approval, decision) {
+    await client.disbursement.update({
+      where: { id: approval.subjectId },
+      data: decision === "APPROVED" ? { status: "APPROVED" } : { status: "DRAFT", invalidatedReason: `Rejected: ${approval.decisionNote ?? "no reason given"}` },
+    });
+    void ctx;
+  },
+});
+
+registerApprovalHandler("RECONCILIATION", {
+  async currentBinding(client, approval) {
+    const r = await client.reconciliation.findUnique({ where: { id: approval.subjectId } });
+    if (!r) return null;
+    const { reconciliationBinding } = await import("./reconciliation");
+    return reconciliationBinding(r);
+  },
+  async within(client, ctx, approval, decision) {
+    if (decision === "APPROVED") {
+      await client.reconciliation.update({ where: { id: approval.subjectId }, data: { status: "REVIEWED", reviewedById: ctx.userId, reviewedAt: new Date() } });
+    }
+  },
+});

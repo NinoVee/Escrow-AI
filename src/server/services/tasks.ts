@@ -249,10 +249,11 @@ export async function updateMilestone(
   input: { status: MilestoneStatus; source?: string; reference?: string; evidenceDocumentId?: string; notes?: string; simulated?: boolean },
 ) {
   if (isExternal(ctx)) throw notFound("Transaction");
-  requirePermission(ctx, "milestone.update");
+  const confirmingFunding = kind === "FUNDING" && input.status === "COMPLETE";
+  // Funding confirmation has its own permission (accounting, officers); other updates need milestone.update.
+  requirePermission(ctx, confirmingFunding ? "milestone.confirm_funding" : "milestone.update");
   const actorId = requireUser(ctx);
-  if (kind === "FUNDING" && input.status === "COMPLETE") {
-    requirePermission(ctx, "milestone.confirm_funding");
+  if (confirmingFunding) {
     if (!input.source || !(FUNDING_SOURCES as readonly string[]).includes(input.source)) {
       throw invalid("Funding must be confirmed from an authorized source (bank reconciliation or verified bank/lender confirmation).");
     }

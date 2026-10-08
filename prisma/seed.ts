@@ -12,6 +12,7 @@ import { symmetricEncrypt } from "better-auth/crypto";
 import { userCtx, type Ctx } from "../src/server/context";
 import { createUserWithPassword, inviteParticipantToPortal } from "../src/server/services/users";
 import { installDefaultTemplates } from "../src/server/services/templates";
+import { installDefaultLedger } from "../src/server/services/reconciliation";
 import { addEntitySigner, addParcel, addParticipant, addProperty, createTransaction, requestSignerReview } from "../src/server/services/transactions";
 import { createDeadline, createTask, resolveTask } from "../src/server/services/tasks";
 import { createDocumentRequest, shareDocument, uploadDocument } from "../src/server/services/documents";
@@ -80,6 +81,8 @@ async function main() {
   await db.$transaction(async (client) => {
     await installDefaultTemplates(client, golden.id, users.admin);
     await installDefaultTemplates(client, harbor.id, users.harborAdmin);
+    await installDefaultLedger(client, golden.id, { name: "Escrow trust account (demo)", bankName: "Sierra Community Bank (fictional)", last4: "4821" });
+    await installDefaultLedger(client, harbor.id, { name: "Escrow trust account (demo)", bankName: "Bayshore Bank (fictional)", last4: "7710" });
   });
 
   const officer = ctx("officer");

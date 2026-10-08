@@ -1139,3 +1139,292 @@ model AssistantInteraction {
 
   @@index([companyId, transactionId, createdAt])
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3: internal tracking ledger (NOT a trust accounting system of record)
+// ---------------------------------------------------------------------------
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  INCOME
+  EXPENSE
+  EQUITY
+}
+
+/// Chart of accounts. Escrow-file balances are a sub-ledger dimension
+/// (JournalLine.transactionId) on the trust liability account.
+model LedgerAccount {
+  id        String      @id @default(cuid())
+  companyId String
+  code      String
+  name      String
+  type      AccountType
+  /// TRUST_BANK | ESCROW_LIABILITY | FEE_INCOME | SUSPENSE
+  purpose   String
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+
+  lines JournalLine[]
+
+  @@unique([companyId, code])
+}
+
+enum EntryKind {
+  RECEIPT
+  DISBURSEMENT
+  FEE
+  ADJUSTMENT
+  PAYOFF
+  TRANSFER
+  REVERSAL
+  OPENING
+}
+
+/// Posted entries are immutable (DB trigger). Corrections are reversal entries.
+model JournalEntry {
+  id              String        @id @default(cuid())
+  companyId       String
+  entryNumber     Int
+  transactionId   String?
+  effectiveDate   DateTime      @db.Date
+  memo            String
+  kind            EntryKind
+  source          String        @default("MANUAL")
+  reference       String?
+  idempotencyKey  String?
+  reversesEntryId String?       @unique
+  postedById      String
+  postedAt        DateTime      @default(now())
+
+  lines JournalLine[]
+
+  @@unique([companyId, entryNumber])
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, transactionId])
+  @@index([companyId, effectiveDate])
+}
+
+model JournalLine {
+  id            String        @id @default(cuid())
+  companyId     String
+  entryId       String
+  entry         JournalEntry  @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  accountId     String
+  account       LedgerAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  transactionId String?
+  debitCents    BigInt        @default(0)
+  creditCents   BigInt        @default(0)
+  memo          String?
+
+  @@index([companyId, accountId, transactionId])
+}
+
+// ---- Settlement (draft estimates) ------------------------------------------
+
+/// Inputs to the draft settlement statement. Computation is deterministic.
+model SettlementItem {
+  id            String   @id @default(cuid())
+  companyId     String
+  transactionId String
+  /// PRICE | DEPOSIT | LOAN | FEE | PAYOFF | PRORATION | SELLER_CREDIT | HOLDBACK | OTHER_DEBIT | OTHER_CREDIT
+  kind          String
+  description   String
+  payee         String?
+  amountCents   BigInt?
+  /// BUYER | SELLER | SPLIT
+  chargeTo      String   @default("BUYER")
+  buyerShareBps Int?
+  /// Proration inputs (validated by src/server/ledger/settlement.ts)
+  proration     Json?
+  sortOrder     Int      @default(0)
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  @@index([companyId, transactionId])
+}
+
+/// Saved draft snapshot of a computed statement. Never an official form.
+model SettlementStatement {
+  id            String   @id @default(cuid())
+  companyId     String
+  transactionId String
+  version       Int
+  settlementDate DateTime @db.Date
+  conventions   Json
+  lines         Json
+  totals        Json
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  @@unique([transactionId, version])
+}
+
+// ---- Bank reconciliation ----------------------------------------------------
+
+model BankAccount {
+  id              String   @id @default(cuid())
+  companyId       String
+  name            String
+  bankName        String
+  accountLast4    String
+  ledgerAccountId String
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  imports      BankStatementImport[]
+  transactions BankTransaction[]
+}
+
+model BankStatementImport {
+  id                 String      @id @default(cuid())
+  companyId          String
+  bankAccountId      String
+  bankAccount        BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  fileSha256         String
+  filename           String
+  statementDate      DateTime    @db.Date
+  endingBalanceCents BigInt
+  rowCount           Int
+  newRows            Int
+  duplicateRows      Int
+  importedById       String
+  createdAt          DateTime    @default(now())
+
+  @@unique([bankAccountId, fileSha256])
+}
+
+model BankTransaction {
+  id             String      @id @default(cuid())
+  companyId      String
+  bankAccountId  String
+  bankAccount    BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  importId       String
+  externalId     String
+  postedDate     DateTime    @db.Date
+  amountCents    BigInt
+  description    String
+  matchedEntryId String?     @unique
+  matchedById    String?
+  matchedAt      DateTime?
+  createdAt      DateTime    @default(now())
+
+  @@unique([bankAccountId, externalId])
+  @@index([companyId, bankAccountId, postedDate])
+}
+
+model Reconciliation {
+  id                       String   @id @default(cuid())
+  companyId                String
+  bankAccountId            String
+  periodEnd                DateTime @db.Date
+  bankBalanceCents         BigInt
+  bookBalanceCents         BigInt
+  fileBalancesTotalCents   BigInt
+  outstandingDepositsCents BigInt
+  outstandingChecksCents   BigInt
+  adjustedBankCents        BigInt
+  bankVsBookCents          BigInt
+  bookVsFilesCents         BigInt
+  /// BALANCED | OUT_OF_BALANCE | REVIEWED
+  status                   String
+  details                  Json
+  preparedById             String
+  reviewedById             String?
+  reviewedAt               DateTime?
+  createdAt                DateTime @default(now())
+
+  @@index([companyId, bankAccountId, periodEnd])
+}
+
+// ---- Bank instructions and disbursements (no payment execution) ----------
+
+enum InstructionStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+  SUPERSEDED
+}
+
+/// Payee bank details. Account and routing numbers are AES-256-GCM encrypted;
+/// only last-4 values are stored in clear. Any change creates a new version
+/// and invalidates verifications and approvals on the old one.
+model BankInstruction {
+  id                 String            @id @default(cuid())
+  companyId          String
+  transactionId      String
+  groupId            String
+  version            Int
+  payeeName          String
+  payeeParticipantId String?
+  bankName           String
+  accountNumberEnc   String
+  routingNumberEnc   String
+  accountLast4       String
+  routingLast4       String
+  /// How the instructions were received (e.g. "Signed form uploaded via portal"). Never email alone.
+  receivedVia        String
+  status             InstructionStatus @default(PENDING_VERIFICATION)
+  createdById        String
+  createdAt          DateTime          @default(now())
+
+  verifications BankInstructionVerification[]
+
+  @@unique([groupId, version])
+  @@index([companyId, transactionId])
+}
+
+model BankInstructionVerification {
+  id                 String          @id @default(cuid())
+  companyId          String
+  instructionId      String
+  instruction        BankInstruction @relation(fields: [instructionId], references: [id], onDelete: Restrict)
+  /// CALLBACK_KNOWN_NUMBER | IN_PERSON | VIDEO_ID_CALLBACK
+  method             String
+  contactName        String
+  phoneLast4         String?
+  /// Where the callback number came from; must be independent of the instructions.
+  phoneSource        String
+  /// CONFIRMED | FAILED
+  outcome            String
+  notes              String?
+  evidenceDocumentId String?
+  verifiedById       String
+  verifiedAt         DateTime        @default(now())
+  invalidatedAt      DateTime?
+  invalidatedReason  String?
+}
+
+enum DisbursementStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  RECORDED_AS_RELEASED
+  INVALIDATED
+  CANCELLED
+}
+
+model Disbursement {
+  id                String             @id @default(cuid())
+  companyId         String
+  transactionId     String
+  payeeName         String
+  /// WIRE | CHECK
+  method            String
+  amountCents       BigInt
+  instructionId     String?
+  memo              String?
+  status            DisbursementStatus @default(DRAFT)
+  version           Int                @default(1)
+  preparedById      String
+  approvalId        String?
+  invalidatedReason String?
+  releasedById      String?
+  releasedAt        DateTime?
+  externalReference String?
+  journalEntryId    String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([companyId, transactionId, status])
+}
