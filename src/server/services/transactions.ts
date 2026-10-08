@@ -522,3 +522,15 @@ export async function requestSignerReview(ctx: Ctx, signerId: string) {
     });
   });
 }
+
+/**
+ * Starts a file from an uploaded purchase agreement. Creates a DRAFT
+ * transaction with no authoritative terms, stores the agreement, and runs
+ * extraction. Every extracted value arrives as a proposal for officer review.
+ */
+export async function createTransactionFromContract(ctx: Ctx, input: { type: TransactionType; filename: string; data: Buffer; officerId?: string }) {
+  const tx = await createTransaction(ctx, { type: input.type, jurisdiction: "US-CA", officerId: input.officerId, title: "New file from uploaded agreement" });
+  const { uploadDocument } = await import("./documents");
+  const upload = await uploadDocument(ctx, { transactionId: tx.id, filename: input.filename, data: input.data, title: "Purchase agreement (uploaded at intake)", category: "PURCHASE_AGREEMENT" });
+  return { transaction: tx, document: upload.document, scan: upload.scan };
+}

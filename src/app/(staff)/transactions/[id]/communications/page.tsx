@@ -7,6 +7,7 @@ import { Badge, Card, EmptyState, Field, Input, Textarea, humanize } from "@/com
 import { createThreadAction, postMessageAction } from "../actions";
 import { displayDateTime } from "@/lib/dates";
 import { OutboundPanel } from "./outbound";
+import { DraftAssistant } from "./draft-assistant";
 
 export default async function CommunicationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -83,7 +84,12 @@ export default async function CommunicationsPage({ params }: { params: Promise<{
           </Card>
         )}
       </div>
-      <OutboundPanel transactionId={tx.id} />
+      <div className="grid gap-6 xl:grid-cols-3">
+        <div className="xl:col-span-2">
+          <OutboundPanel transactionId={tx.id} />
+        </div>
+        {hasPermission(ctx, "ai.use") && canDraft && <DraftAssistant transactionId={tx.id} participants={participants.map((p) => ({ id: p.id, label: `${p.displayName} (${humanize(p.role)})` }))} />}
+      </div>
     </div>
   );
 }

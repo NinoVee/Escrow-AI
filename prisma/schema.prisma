@@ -1080,3 +1080,62 @@ model AuditEvent {
   @@index([companyId, transactionId, createdAt])
   @@index([companyId, action])
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2: document intelligence
+// ---------------------------------------------------------------------------
+
+enum RunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+/// One AI or demo extraction pass over one document version. Output is
+/// validated against a schema and turned into Proposals; it never changes
+/// authoritative data directly.
+model ExtractionRun {
+  id                String          @id @default(cuid())
+  companyId         String
+  transactionId     String
+  documentId        String
+  documentVersionId String
+  kind              String          @default("CONTRACT")
+  provider          String
+  model             String?
+  mode              IntegrationMode
+  status            RunStatus       @default(QUEUED)
+  classification    String?
+  classificationConfidence Float?
+  summary           String?
+  /// Deterministic post-processing notes: dropped values, excerpt mismatches, injection flags.
+  notes             Json?
+  /// Schema-validated provider output (never raw, never instructions).
+  output            Json?
+  error             String?
+  requestedById     String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime        @default(now())
+
+  @@index([companyId, documentId, createdAt])
+}
+
+/// Log of assistant questions, answers and drafts with the citations shown.
+model AssistantInteraction {
+  id            String          @id @default(cuid())
+  companyId     String
+  transactionId String
+  userId        String
+  kind          String
+  prompt        String
+  response      String
+  citations     Json?
+  provider      String
+  model         String?
+  mode          IntegrationMode
+  createdAt     DateTime        @default(now())
+
+  @@index([companyId, transactionId, createdAt])
+}
