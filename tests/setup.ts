@@ -1,0 +1,10 @@
+import { config } from "dotenv";
+config();
+const url = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL?.replace(/\/escrowflow(\?|$)/, "/escrowflow_test$1");
+process.env.DATABASE_URL = url;
+(process.env as Record<string, string>).NODE_ENV = "test";
+process.env.STORAGE_DRIVER = "local";
+process.env.STORAGE_LOCAL_DIR = "./storage-test";
+process.env.MALWARE_SCANNER = "demo";
+process.env.AI_PROVIDER = "demo";
+process.env.EXTERNAL_SEND_ENABLED = "false";

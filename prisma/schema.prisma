@@ -1,0 +1,1082 @@
+// EscrowFlow database schema.
+//
+// Conventions
+// - Every tenant-scoped table carries `companyId`. Services always filter on it;
+//   never query a tenant table without the caller's companyId.
+// - Money is stored as BigInt minor units (cents). Never use Float for money.
+// - Rows that represent history (audit events, posted journal entries,
+//   field provenance, stage transitions) are append-only. See the SQL
+//   migrations for the triggers that enforce this at the database level.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Authentication (Better Auth managed tables)
+// ---------------------------------------------------------------------------
+
+model User {
+  id               String    @id
+  name             String
+  email            String    @unique
+  emailVerified    Boolean   @default(false)
+  image            String?
+  twoFactorEnabled Boolean?  @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  sessions     Session[]
+  accounts     Account[]
+  twoFactors   TwoFactor[]
+  memberships  Membership[]
+  participants Participant[]
+  stepUps      StepUpVerification[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model TwoFactor {
+  id                      String    @id
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean?  @default(true)
+  failedVerificationCount Int?      @default(0)
+  lockedUntil             DateTime?
+
+  @@index([secret])
+  @@index([userId])
+  @@map("twoFactor")
+}
+
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rateLimit")
+}
+
+/// A successful step-up (TOTP re-verification) bound to one session.
+/// Sensitive actions require a step-up newer than the company's window.
+model StepUpVerification {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId  String
+  success    Boolean
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([userId, sessionId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+enum Role {
+  COMPANY_ADMIN
+  ESCROW_OFFICER
+  ESCROW_ASSISTANT
+  ACCOUNTING
+  MANAGER
+  EXTERNAL
+}
+
+enum MembershipStatus {
+  ACTIVE
+  DISABLED
+}
+
+model Company {
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String   @unique
+  defaultJurisdiction String  @default("US-CA")
+  /// Validated by src/server/settings.ts (CompanySettings schema)
+  settings           Json     @default("{}")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  memberships  Membership[]
+  transactions Transaction[]
+  templates    WorkflowTemplate[]
+}
+
+model Membership {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  role      Role
+  status    MembershipStatus @default(ACTIVE)
+  title     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([userId, companyId])
+  @@index([companyId, role])
+}
+
+/// Invitation to create an account (staff) or portal access (external).
+/// Only a SHA-256 hash of the token is stored.
+model Invitation {
+  id            String    @id @default(cuid())
+  companyId     String
+  email         String
+  name          String
+  role          Role
+  participantId String?
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+  revokedAt     DateTime?
+  createdById   String
+  createdAt     DateTime  @default(now())
+
+  @@index([companyId, email])
+}
+
+// ---------------------------------------------------------------------------
+// Workflow templates (versioned)
+// ---------------------------------------------------------------------------
+
+enum TransactionType {
+  RESIDENTIAL
+  COMMERCIAL
+}
+
+enum TemplateVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+model WorkflowTemplate {
+  id              String          @id @default(cuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  key             String
+  name            String
+  transactionType TransactionType
+  jurisdiction    String
+  description     String?
+  createdAt       DateTime        @default(now())
+
+  versions WorkflowTemplateVersion[]
+
+  @@unique([companyId, key])
+}
+
+model WorkflowTemplateVersion {
+  id           String                @id @default(cuid())
+  companyId    String
+  templateId   String
+  template     WorkflowTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version      Int
+  status       TemplateVersionStatus @default(DRAFT)
+  /// Validated by src/server/workflow/definition.ts (WorkflowDefinition schema)
+  definition   Json
+  changeNote   String?
+  createdById  String?
+  createdAt    DateTime              @default(now())
+  publishedById String?
+  publishedAt  DateTime?
+
+  transactions Transaction[]
+
+  @@unique([templateId, version])
+  @@index([companyId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Transactions
+// ---------------------------------------------------------------------------
+
+enum TransactionStatus {
+  ACTIVE
+  ON_HOLD
+  CANCELLED
+  CLOSED
+}
+
+enum FinancingType {
+  CASH
+  CONVENTIONAL
+  FHA
+  VA
+  SELLER_CARRY
+  COMMERCIAL_LOAN
+  OTHER
+}
+
+model Transaction {
+  id                   String            @id @default(cuid())
+  companyId            String
+  company              Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  escrowNumber         String
+  type                 TransactionType
+  jurisdiction         String
+  status               TransactionStatus @default(ACTIVE)
+  stage                String
+  stageEnteredAt       DateTime          @default(now())
+  templateVersionId    String
+  templateVersion      WorkflowTemplateVersion @relation(fields: [templateVersionId], references: [id])
+  officerId            String?
+  assistantId          String?
+  title                String?
+
+  // Authoritative deal terms. Changes are recorded in FieldProvenance.
+  purchasePriceCents   BigInt?
+  initialDepositCents  BigInt?
+  additionalDepositCents BigInt?
+  loanAmountCents      BigInt?
+  financingType        FinancingType?
+  acceptanceDate       DateTime?         @db.Date
+  proposedClosingDate  DateTime?         @db.Date
+  actualClosingDate    DateTime?         @db.Date
+  hasHoa               Boolean           @default(false)
+  hasTenants           Boolean           @default(false)
+  is1031Exchange       Boolean           @default(false)
+  notes                String?
+
+  holdReason           String?
+  cancelReason         String?
+  closedAt             DateTime?
+  legalHold            Boolean           @default(false)
+  retentionUntil       DateTime?
+
+  /// Optimistic concurrency token. Incremented on every authoritative change.
+  version              Int               @default(1)
+  createdById          String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  properties       Property[]
+  participants     Participant[]
+  tasks            Task[]
+  deadlines        Deadline[]
+  milestones       Milestone[]
+  transitions      StageTransition[]
+  documents        Document[]
+  documentRequests DocumentRequest[]
+  fieldProvenance  FieldProvenance[]
+  proposals        Proposal[]
+  approvals        Approval[]
+  titleOrders      TitleOrder[]
+  titleExceptions  TitleException[]
+  propertyLookups  PropertyLookup[]
+  threads          MessageThread[]
+
+  @@unique([companyId, escrowNumber])
+  @@index([companyId, status, type])
+  @@index([companyId, officerId])
+}
+
+model Property {
+  id            String      @id @default(cuid())
+  companyId     String
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  label         String?
+  street        String
+  unit          String?
+  city          String
+  county        String?
+  state         String      @default("CA")
+  postalCode    String?
+  propertyType  String      @default("SINGLE_FAMILY")
+  hoaName       String?
+  sortOrder     Int         @default(0)
+  createdAt     DateTime    @default(now())
+
+  parcels Parcel[]
+
+  @@index([companyId, transactionId])
+}
+
+model Parcel {
+  id               String   @id @default(cuid())
+  companyId        String
+  propertyId       String
+  property         Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  apn              String
+  legalDescription String?
+  createdAt        DateTime @default(now())
+
+  @@index([companyId, apn])
+}
+
+enum ParticipantRole {
+  BUYER
+  SELLER
+  BUYER_AGENT
+  LISTING_AGENT
+  LENDER
+  MORTGAGE_BROKER
+  TITLE_REP
+  ATTORNEY
+  ENTITY_REPRESENTATIVE
+  EXCHANGE_ACCOMMODATOR
+  HOA
+  PAYOFF_LENDER
+  OTHER
+}
+
+enum ParticipantSide {
+  BUYER
+  SELLER
+  NEUTRAL
+}
+
+enum PartyType {
+  INDIVIDUAL
+  LLC
+  CORPORATION
+  TRUST
+  PARTNERSHIP
+  ESTATE
+  OTHER_ENTITY
+}
+
+model Participant {
+  id             String          @id @default(cuid())
+  companyId      String
+  transactionId  String
+  transaction    Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  role           ParticipantRole
+  side           ParticipantSide
+  partyType      PartyType       @default(INDIVIDUAL)
+  displayName    String
+  organization   String?
+  email          String?
+  phone          String?
+  /// Portal account, when the participant has been invited.
+  userId         String?
+  user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  portalAccess   Boolean         @default(false)
+  invitedAt      DateTime?
+  emailNotifications Boolean     @default(true)
+  unsubscribedAt DateTime?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  signers        EntitySigner[]
+  shares         DocumentShare[]
+  requests       DocumentRequest[]
+  threadMembers  ThreadParticipant[]
+
+  @@index([companyId, transactionId])
+  @@index([userId])
+}
+
+enum AuthorityStatus {
+  UNVERIFIED
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+/// Authorized signer for an entity participant. Approval of signing authority
+/// is a human decision (never AI) and is captured with evidence.
+model EntitySigner {
+  id                  String          @id @default(cuid())
+  companyId           String
+  participantId       String
+  participant         Participant     @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  name                String
+  title               String?
+  email               String?
+  authorityStatus     AuthorityStatus @default(UNVERIFIED)
+  authorityDocumentId String?
+  reviewedById        String?
+  reviewedAt          DateTime?
+  reviewNote          String?
+  createdAt           DateTime        @default(now())
+
+  @@index([companyId, participantId])
+}
+
+// ---------------------------------------------------------------------------
+// Tasks, deadlines, milestones, stage history
+// ---------------------------------------------------------------------------
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  DONE
+  NOT_APPLICABLE
+  WAIVED
+}
+
+enum ItemSource {
+  TEMPLATE
+  MANUAL
+  AI_PROPOSAL
+  AUTOMATION
+}
+
+model Task {
+  id                 String      @id @default(cuid())
+  companyId          String
+  transactionId      String
+  transaction        Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  templateKey        String?
+  title              String
+  description        String?
+  category           String      @default("GENERAL")
+  stage              String?
+  required           Boolean     @default(false)
+  isBlocker          Boolean     @default(false)
+  requiresApproval   Boolean     @default(false)
+  status             TaskStatus  @default(OPEN)
+  assigneeUserId     String?
+  responsibleParticipantId String?
+  dueAt              DateTime?
+  completedAt        DateTime?
+  completedById      String?
+  evidenceDocumentId String?
+  resolutionNote     String?
+  source             ItemSource  @default(MANUAL)
+  applicabilityNote  String?
+  approvalId         String?
+  sortOrder          Int         @default(0)
+  version            Int         @default(1)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@unique([transactionId, templateKey])
+  @@index([companyId, status, dueAt])
+  @@index([companyId, assigneeUserId])
+}
+
+enum DeadlineType {
+  CONTINGENCY
+  CONTRACT
+  CLOSING
+  LENDER
+  INTERNAL
+  OTHER
+}
+
+enum DeadlineStatus {
+  PENDING
+  MET
+  WAIVED
+  EXTENDED
+  MISSED
+}
+
+model Deadline {
+  id            String         @id @default(cuid())
+  companyId     String
+  transactionId String
+  transaction   Transaction    @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  title         String
+  type          DeadlineType   @default(CONTRACT)
+  dueAt         DateTime
+  status        DeadlineStatus @default(PENDING)
+  source        ItemSource     @default(MANUAL)
+  documentId    String?
+  page          Int?
+  excerpt       String?
+  notes         String?
+  resolvedAt    DateTime?
+  resolvedById  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([companyId, status, dueAt])
+}
+
+enum MilestoneKind {
+  SIGNING
+  FUNDING
+  RECORDING
+  DISBURSEMENT
+}
+
+enum MilestoneStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETE
+  NOT_APPLICABLE
+}
+
+/// Tracked independently of the stage because their order varies by file.
+model Milestone {
+  id                 String          @id @default(cuid())
+  companyId          String
+  transactionId      String
+  transaction        Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  kind               MilestoneKind
+  status             MilestoneStatus @default(NOT_STARTED)
+  completedAt        DateTime?
+  confirmedById      String?
+  /// e.g. STAFF_VERIFIED, BANK_RECONCILIATION, ESIGN_PROVIDER, RECORDING_SERVICE
+  confirmationSource String?
+  reference          String?
+  evidenceDocumentId String?
+  notes              String?
+  isSimulated        Boolean         @default(false)
+  updatedAt          DateTime        @updatedAt
+
+  @@unique([transactionId, kind])
+}
+
+enum TransitionKind {
+  ADVANCE
+  HOLD
+  RESUME
+  CANCEL
+  REOPEN
+  CLOSE
+}
+
+model StageTransition {
+  id                    String         @id @default(cuid())
+  companyId             String
+  transactionId         String
+  transaction           Transaction    @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  kind                  TransitionKind
+  fromStage             String
+  toStage               String
+  fromStatus            TransactionStatus
+  toStatus              TransactionStatus
+  reason                String
+  actorId               String
+  overridden            Boolean        @default(false)
+  overrideJustification String?
+  unmetPrerequisites    Json?
+  approvalId            String?
+  templateVersionId     String
+  transactionVersion    Int
+  createdAt             DateTime       @default(now())
+
+  @@index([companyId, transactionId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Field provenance
+// ---------------------------------------------------------------------------
+
+enum ProvenanceSource {
+  MANUAL
+  DOCUMENT_EXTRACTION
+  IMPORT
+}
+
+/// Append-only history of authoritative values. Exactly one CURRENT row per
+/// (transaction, fieldPath); prior values are SUPERSEDED, never deleted.
+model FieldProvenance {
+  id                String           @id @default(cuid())
+  companyId         String
+  transactionId     String
+  transaction       Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  fieldPath         String
+  value             Json
+  source            ProvenanceSource
+  documentId        String?
+  documentVersionId String?
+  page              Int?
+  excerpt           String?
+  confidence        Float?
+  proposalId        String?
+  isCurrent         Boolean          @default(true)
+  setById           String
+  reason            String?
+  createdAt         DateTime         @default(now())
+
+  @@index([companyId, transactionId, fieldPath, isCurrent])
+}
+
+enum ProposalKind {
+  FIELD
+  TASK
+  DEADLINE
+  PARTY
+  PROPERTY
+  TITLE_EXCEPTION
+}
+
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+}
+
+/// A suggested change that is NOT authoritative until a permitted user accepts
+/// it. Produced by document extraction (AI or demo) or amendment comparison.
+model Proposal {
+  id                String         @id @default(cuid())
+  companyId         String
+  transactionId     String
+  transaction       Transaction    @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  kind              ProposalKind
+  fieldPath         String?
+  proposedValue     Json
+  currentValue      Json?
+  isConflict        Boolean        @default(false)
+  conflictNote      String?
+  lowConfidence     Boolean        @default(false)
+  confidence        Float?
+  documentId        String?
+  documentVersionId String?
+  extractionRunId   String?
+  page              Int?
+  excerpt           String?
+  rationale         String?
+  status            ProposalStatus @default(PENDING)
+  decidedById       String?
+  decidedAt         DateTime?
+  decisionNote      String?
+  createdAt         DateTime       @default(now())
+
+  @@index([companyId, transactionId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+
+enum DocumentVisibility {
+  INTERNAL
+  SHARED
+}
+
+enum ScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  ERROR
+}
+
+enum TextStatus {
+  PENDING
+  EXTRACTED
+  OCR_REQUIRED
+  OCR_COMPLETE
+  FAILED
+  NOT_APPLICABLE
+}
+
+enum ReviewDecision {
+  ACCEPTED
+  REJECTED
+  NEEDS_CHANGES
+}
+
+model Document {
+  id                      String             @id @default(cuid())
+  companyId               String
+  transactionId           String
+  transaction             Transaction        @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  title                   String
+  category                String             @default("OTHER")
+  visibility              DocumentVisibility @default(INTERNAL)
+  currentVersionId        String?
+  uploadedById            String?
+  uploadedByParticipantId String?
+  legalHold               Boolean            @default(false)
+  archivedAt              DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  versions DocumentVersion[]
+  shares   DocumentShare[]
+
+  @@index([companyId, transactionId, category])
+}
+
+model DocumentVersion {
+  id                      String     @id @default(cuid())
+  companyId               String
+  documentId              String
+  document                Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  versionNumber           Int
+  storageKey              String
+  originalFilename        String
+  mimeType                String
+  sizeBytes               Int
+  sha256                  String
+  scanStatus              ScanStatus @default(PENDING)
+  scanProvider            String?
+  scanDetail              String?
+  scannedAt               DateTime?
+  textStatus              TextStatus @default(PENDING)
+  pageCount               Int?
+  /// Set when text contains patterns resembling instructions to an AI system.
+  injectionFlags          Json?
+  uploadedById            String?
+  uploadedByParticipantId String?
+  createdAt               DateTime   @default(now())
+
+  pages   DocumentPage[]
+  reviews DocumentReview[]
+
+  @@unique([documentId, versionNumber])
+}
+
+/// Extracted text per page, used for citations and permission-filtered search.
+model DocumentPage {
+  id         String          @id @default(cuid())
+  companyId  String
+  versionId  String
+  version    DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  pageNumber Int
+  text       String
+  ocr        Boolean         @default(false)
+
+  @@unique([versionId, pageNumber])
+}
+
+model DocumentReview {
+  id         String          @id @default(cuid())
+  companyId  String
+  versionId  String
+  version    DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  reviewerId String
+  decision   ReviewDecision
+  note       String?
+  createdAt  DateTime        @default(now())
+}
+
+/// Explicit share of one document with one participant. External users see
+/// documents only through an unrevoked share (or documents they uploaded).
+model DocumentShare {
+  id            String      @id @default(cuid())
+  companyId     String
+  documentId    String
+  document      Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  sharedById    String
+  createdAt     DateTime    @default(now())
+  revokedAt     DateTime?
+
+  @@unique([documentId, participantId])
+}
+
+enum RequestStatus {
+  OPEN
+  SUBMITTED
+  ACCEPTED
+  CANCELLED
+}
+
+model DocumentRequest {
+  id                  String        @id @default(cuid())
+  companyId           String
+  transactionId       String
+  transaction         Transaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  participantId       String
+  participant         Participant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  title               String
+  description         String?
+  category            String        @default("OTHER")
+  status              RequestStatus @default(OPEN)
+  dueAt               DateTime?
+  fulfilledDocumentId String?
+  createdById         String
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([companyId, transactionId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Title and property data
+// ---------------------------------------------------------------------------
+
+enum IntegrationMode {
+  NOT_CONFIGURED
+  DEMO
+  SANDBOX
+  LIVE
+}
+
+enum TitleOrderStatus {
+  DRAFT
+  SUBMITTED
+  IN_PROGRESS
+  REPORT_RECEIVED
+  CANCELLED
+  ERROR
+}
+
+model TitleOrder {
+  id               String           @id @default(cuid())
+  companyId        String
+  transactionId    String
+  transaction      Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider         String
+  mode             IntegrationMode
+  externalRef      String?
+  status           TitleOrderStatus @default(DRAFT)
+  orderedById      String
+  orderedAt        DateTime         @default(now())
+  lastStatusAt     DateTime?
+  reportDocumentId String?
+  notes            String?
+}
+
+enum ExceptionDisposition {
+  OPEN
+  TO_BE_PAID_OFF
+  TO_BE_REMOVED
+  BUYER_APPROVED
+  CLEARED_BY_TITLE
+  NO_ACTION_NEEDED
+}
+
+/// A schedule B item / requirement transcribed from a title report.
+/// Dispositions are staff decisions; they do not mean title is clear.
+model TitleException {
+  id            String               @id @default(cuid())
+  companyId     String
+  transactionId String
+  transaction   Transaction          @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  documentId    String
+  itemNumber    String?
+  category      String               @default("OTHER")
+  description   String
+  page          Int?
+  aiSummary     String?
+  source        ItemSource           @default(MANUAL)
+  disposition   ExceptionDisposition @default(OPEN)
+  dispositionNote String?
+  updatedById   String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([companyId, transactionId])
+}
+
+enum LookupKind {
+  PROPERTY_DATA
+  RECORDED_DOCUMENTS
+}
+
+/// Result of a property data or recorded-document lookup. Never proof of title.
+model PropertyLookup {
+  id            String          @id @default(cuid())
+  companyId     String
+  transactionId String
+  transaction   Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  propertyId    String?
+  kind          LookupKind
+  provider      String
+  mode          IntegrationMode
+  query         Json
+  result        Json
+  coverageNote  String
+  retrievedAt   DateTime        @default(now())
+  requestedById String
+}
+
+// ---------------------------------------------------------------------------
+// Approvals
+// ---------------------------------------------------------------------------
+
+enum ApprovalType {
+  STAGE_TRANSITION
+  TASK_COMPLETION
+  SIGNING_AUTHORITY
+  COMMUNICATION_SEND
+  DISBURSEMENT
+  BANK_INSTRUCTION
+  RECONCILIATION
+  WORKFLOW_OVERRIDE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  INVALIDATED
+  CANCELLED
+  CONSUMED
+}
+
+/// An approval is bound to the exact subject state through `bindingHash`.
+/// If the subject changes, the approval is invalidated and must be redone.
+model Approval {
+  id                 String         @id @default(cuid())
+  companyId          String
+  transactionId      String?
+  transaction        Transaction?   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  type               ApprovalType
+  status             ApprovalStatus @default(PENDING)
+  title              String
+  summary            String?
+  subjectType        String
+  subjectId          String
+  bindingHash        String
+  bindingSnapshot    Json
+  requiredPermission String
+  requestedById      String
+  assignedToId       String?
+  decidedById        String?
+  decidedAt          DateTime?
+  decisionNote       String?
+  stepUpVerified     Boolean        @default(false)
+  invalidatedReason  String?
+  consumedAt         DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([companyId, status, type])
+  @@index([subjectType, subjectId])
+}
+
+// ---------------------------------------------------------------------------
+// Communications (Phase 1: secure portal messages)
+// ---------------------------------------------------------------------------
+
+model MessageThread {
+  id            String      @id @default(cuid())
+  companyId     String
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  subject       String
+  internalOnly  Boolean     @default(false)
+  createdById   String
+  createdAt     DateTime    @default(now())
+
+  members  ThreadParticipant[]
+  messages Message[]
+}
+
+model ThreadParticipant {
+  id            String        @id @default(cuid())
+  threadId      String
+  thread        MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   Participant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, participantId])
+}
+
+model Message {
+  id                  String        @id @default(cuid())
+  companyId           String
+  threadId            String
+  thread              MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorUserId        String
+  authorParticipantId String?
+  body                String
+  createdAt           DateTime      @default(now())
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  companyId String
+  userId    String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+enum ActorType {
+  USER
+  SYSTEM
+  AI
+  JOB
+  WEBHOOK
+}
+
+/// Append-only (UPDATE/DELETE are rejected by a trigger) and hash-chained per
+/// company. This is tamper-evident inside one database, NOT tamper-proof: a
+/// database superuser can still rewrite it. See docs/SECURITY.md.
+model AuditEvent {
+  id                String    @id @default(cuid())
+  seq               BigInt    @default(autoincrement())
+  companyId         String?
+  actorType         ActorType
+  actorUserId       String?
+  actorLabel        String?
+  transactionId     String?
+  action            String
+  entityType        String
+  entityId          String?
+  entityVersion     Int?
+  summary           String
+  details           Json?
+  ip                String?
+  userAgent         String?
+  prevHash          String?
+  hash              String
+  createdAt         DateTime  @default(now())
+
+  @@unique([seq])
+  @@index([companyId, transactionId, createdAt])
+  @@index([companyId, action])
+}
