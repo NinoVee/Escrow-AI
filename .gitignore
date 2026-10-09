@@ -52,3 +52,6 @@ next-env.d.ts
 # allow example env
 !.env.example
 /storage-test/
+
+# Local Redis snapshot
+dump.rdb
