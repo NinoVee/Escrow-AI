@@ -58,6 +58,10 @@ Configuring SMTP does not send anything by itself. Mail leaves the system only w
 
 Use a sandbox relay (Mailpit, or your provider's test mode) before going live. Every email carries a stable Message-ID, so a relay can de-duplicate retries.
 
+### Database storage
+
+`STORAGE_DRIVER=database` keeps document bytes in a private PostgreSQL table. Downloads use the same user-bound, short-lived signed links as local disk. It needs no extra service, which makes it the simplest choice for demos and serverless hosts. It grows the database and its backups, so use S3 for production volumes.
+
 ### S3-compatible storage
 
 Set `STORAGE_DRIVER=s3` with `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` and `S3_FORCE_PATH_STYLE`. `docker-compose.yml` includes MinIO for local testing.

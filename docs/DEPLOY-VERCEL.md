@@ -1,6 +1,6 @@
 # Deploying to Vercel
 
-EscrowFlow can run on Vercel. It needs a hosted PostgreSQL database and private S3-compatible storage. It does not need Redis or a worker.
+EscrowFlow can run on Vercel. It needs only a hosted PostgreSQL database, plus optional private S3-compatible storage. It does not need Redis or a worker.
 
 > **Read this before you deploy.**
 > - **Deployments are reachable from the internet.** Turn on **Deployment Protection** (Vercel Authentication or password protection) for every environment until the [production-readiness checklist](PRODUCTION-READINESS.md) is complete.
@@ -14,7 +14,7 @@ EscrowFlow can run on Vercel. It needs a hosted PostgreSQL database and private 
 |---|---|---|
 | Background jobs (document processing, email, webhooks) | BullMQ worker (`npm run worker`) | **Deferred mode.** Jobs run in the same function right after the response is sent (Next.js `after`). The default when `VERCEL=1`. |
 | Retries, stalled jobs, automation rules | Worker and its scheduler | **Vercel Cron** calls `/api/cron/jobs`, authenticated with `CRON_SECRET`. |
-| Document storage | Local disk or S3 | **S3-compatible storage only.** The build fails with `STORAGE_DRIVER=local`. |
+| Document storage | Local disk or S3 | **`database`** stores documents privately in PostgreSQL; simplest, good for demos. **`s3`** uses an S3-compatible bucket; recommended for real volumes. The build fails with `STORAGE_DRIVER=local`. |
 | Database connections | Pool of 10 | Pool of 3 per function instance (`DB_POOL_MAX`). Use a **pooled** connection string. |
 | Migrations | `npm run db:migrate` | Applied by the build on **production** deployments. Previews skip them. |
 | Upload size | `MAX_UPLOAD_MB` (default 25) | Capped at **4 MB**, because Vercel Functions reject larger request bodies. |
@@ -29,7 +29,7 @@ The build command (`npm run vercel-build`, set in `vercel.json`) checks the envi
    - **Direct**, unpooled, for migrations (`DIRECT_DATABASE_URL`).
 
    The migrations create triggers and constraint triggers, so the migrating role must own the tables. A normal database owner can do this; no superuser is needed.
-2. **S3-compatible bucket.** For example AWS S3 or Cloudflare R2.
+2. **Optional: an S3-compatible bucket**, for example AWS S3 or Cloudflare R2. You can skip this and use `STORAGE_DRIVER=database`, which keeps documents in Postgres. That's fine for a demo, but it grows the database and isn't meant for production volumes. If you do use a bucket:
    - Keep it **private**: block public access.
    - Turn on default encryption and versioning.
    - Create an access key limited to that bucket (`GetObject`, `PutObject`, `DeleteObject`, `HeadObject`).
@@ -55,10 +55,10 @@ Set these in Project Settings → Environment Variables. Use separate values for
 | `BETTER_AUTH_SECRET` | `openssl rand -base64 48` |
 | `DOWNLOAD_SIGNING_SECRET` | `openssl rand -base64 48` |
 | `FIELD_ENCRYPTION_KEY` | `openssl rand -base64 32`. This encrypts bank details; **back it up**, because data encrypted with it cannot be recovered without it. |
-| `STORAGE_DRIVER` | `s3` |
-| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Your bucket |
-| `S3_ENDPOINT` | Leave empty for AWS. Set it for R2, MinIO and similar. |
-| `S3_FORCE_PATH_STYLE` | `false` for AWS. Usually `true` for MinIO. |
+| `STORAGE_DRIVER` | `database` (simplest), or `s3` with the variables below |
+| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Only for `s3`: your bucket |
+| `S3_ENDPOINT` | Only for `s3`. Leave empty for AWS. Set it for R2, MinIO and similar. |
+| `S3_FORCE_PATH_STYLE` | Only for `s3`. `false` for AWS. Usually `true` for MinIO. |
 | `CRON_SECRET` | `openssl rand -hex 32`. Vercel Cron sends it automatically. Without it, failed jobs are not retried and automation rules never run. |
 
 **Recommended or optional:**

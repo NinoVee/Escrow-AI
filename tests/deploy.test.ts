@@ -17,7 +17,7 @@ function setEnv(vars: Record<string, string | undefined>) {
 }
 
 afterEach(() => {
-  for (const k of ["VERCEL", "VERCEL_ENV", "VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL", "APP_URL", "JOBS_MODE", "CRON_SECRET", "MAX_UPLOAD_MB"]) {
+  for (const k of ["STORAGE_DRIVER", "VERCEL", "VERCEL_ENV", "VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL", "APP_URL", "JOBS_MODE", "CRON_SECRET", "MAX_UPLOAD_MB"]) {
     if (saved[k] === undefined) delete process.env[k];
     else process.env[k] = saved[k];
   }
@@ -120,9 +120,28 @@ describe("Vercel deployment support", () => {
   });
 
   it("refuses local disk storage on Vercel", async () => {
-    setEnv({ VERCEL: "1" });
+    setEnv({ VERCEL: "1", STORAGE_DRIVER: "local" });
     vi.resetModules();
     const fresh = await import("@/server/storage/storage");
     expect(() => fresh.storage()).toThrow(/cannot be used on Vercel/);
+  });
+
+  it("database storage driver stores privately and serves through user-bound signed links", async () => {
+    setEnv({ STORAGE_DRIVER: "database", VERCEL: "1" });
+    vi.resetModules();
+    const { storage, verifyLocalToken } = await import("@/server/storage/storage");
+    const st = storage();
+    expect(st.kind).toBe("database");
+    await st.put("tests/a.pdf", Buffer.from("%PDF-1.4 test"), "application/pdf");
+    expect((await st.get("tests/a.pdf")).toString()).toBe("%PDF-1.4 test");
+    await st.move("tests/a.pdf", "tests/b.pdf");
+    await expect(st.get("tests/a.pdf")).rejects.toThrow();
+    const url = await st.signedDownloadUrl("tests/b.pdf", { filename: "b.pdf", contentType: "application/pdf", ttlSeconds: 60, userId: "user-1" });
+    const token = url.replace("/api/files/", "");
+    expect(verifyLocalToken(token)).toMatchObject({ k: "tests/b.pdf", u: "user-1" });
+    expect(verifyLocalToken(token.slice(0, -2) + "00")).toBeNull();
+    await expect(st.put("../escape", Buffer.from("x"), "text/plain")).rejects.toThrow(/Invalid storage key/);
+    await st.remove("tests/b.pdf");
+    expect(await db.storedObject.count({ where: { key: { startsWith: "tests/" } } })).toBe(0);
   });
 });

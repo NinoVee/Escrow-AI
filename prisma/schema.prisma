@@ -1612,3 +1612,14 @@ model OutboundMessage {
   @@unique([companyId, idempotencyKey])
   @@index([companyId, transactionId, status])
 }
+
+/// Document bytes for STORAGE_DRIVER=database (demos and small deployments
+/// without object storage). Never publicly readable; served through
+/// user-bound signed links after an authorization check.
+model StoredObject {
+  key         String   @id
+  data        Bytes
+  contentType String
+  size        Int
+  createdAt   DateTime @default(now())
+}

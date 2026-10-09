@@ -4,14 +4,16 @@ import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, PutObjectComm
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../env";
 import { hmacHex, safeEqualHex } from "../crypto";
+import { db } from "../db";
 
 /**
  * Private document storage. Objects are never publicly readable. Downloads go
  * through an authorization check in the app, which then issues a short-lived
- * signed URL (S3 presigned URL, or an HMAC-signed app URL for local disk).
+ * signed URL (S3 presigned URL, or an HMAC-signed app URL for local disk and
+ * database storage).
  */
 export interface StorageDriver {
-  readonly kind: "local" | "s3";
+  readonly kind: "local" | "s3" | "database";
   put(key: string, data: Buffer, contentType: string): Promise<void>;
   get(key: string): Promise<Buffer>;
   move(from: string, to: string): Promise<void>;
@@ -56,6 +58,41 @@ class LocalStorage implements StorageDriver {
     await fs.rm(this.full(key), { force: true });
   }
   async signedDownloadUrl(key: string, opts: SignedUrlOptions) {
+    const token = signLocalToken({ k: key, f: opts.filename, ct: opts.contentType, u: opts.userId, exp: Math.floor(Date.now() / 1000) + opts.ttlSeconds });
+    return `/api/files/${token}`;
+  }
+}
+
+/**
+ * Stores objects in PostgreSQL (StoredObject). Private like the other drivers;
+ * downloads use the same user-bound, short-lived signed app URLs as local disk.
+ * Intended for demos and small deployments without object storage (e.g. Vercel
+ * with uploads capped at 4 MB); use S3 for production volumes.
+ */
+class DatabaseStorage implements StorageDriver {
+  readonly kind = "database" as const;
+  async put(key: string, data: Buffer, contentType: string) {
+    assertKey(key);
+    const bytes = new Uint8Array(data);
+    await db.storedObject.upsert({ where: { key }, create: { key, data: bytes, contentType, size: data.length }, update: { data: bytes, contentType, size: data.length } });
+  }
+  async get(key: string) {
+    assertKey(key);
+    const o = await db.storedObject.findUnique({ where: { key } });
+    if (!o) throw new Error("Object not found");
+    return Buffer.from(o.data);
+  }
+  async move(from: string, to: string) {
+    assertKey(from);
+    assertKey(to);
+    await db.storedObject.update({ where: { key: from }, data: { key: to } });
+  }
+  async remove(key: string) {
+    assertKey(key);
+    await db.storedObject.deleteMany({ where: { key } });
+  }
+  async signedDownloadUrl(key: string, opts: SignedUrlOptions) {
+    assertKey(key);
     const token = signLocalToken({ k: key, f: opts.filename, ct: opts.contentType, u: opts.userId, exp: Math.floor(Date.now() / 1000) + opts.ttlSeconds });
     return `/api/files/${token}`;
   }
@@ -111,8 +148,10 @@ export function storage(): StorageDriver {
     if (e.STORAGE_DRIVER === "s3") {
       if (!e.S3_BUCKET) throw new Error("S3_BUCKET is required when STORAGE_DRIVER=s3");
       driver = new S3Storage(e.S3_BUCKET);
+    } else if (e.STORAGE_DRIVER === "database") {
+      driver = new DatabaseStorage();
     } else {
-      if (process.env.VERCEL === "1") throw new Error("STORAGE_DRIVER=local cannot be used on Vercel: function file systems are temporary. Set STORAGE_DRIVER=s3 and the S3_* variables (see docs/DEPLOY-VERCEL.md).");
+      if (process.env.VERCEL === "1") throw new Error("STORAGE_DRIVER=local cannot be used on Vercel: function file systems are temporary. Set STORAGE_DRIVER=database (demos) or STORAGE_DRIVER=s3 with the S3_* variables (see docs/DEPLOY-VERCEL.md).");
       driver = new LocalStorage(e.STORAGE_LOCAL_DIR);
     }
   }

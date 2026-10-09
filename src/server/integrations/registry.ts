@@ -177,6 +177,7 @@ export async function integrationStatuses(companyId: string): Promise<Integratio
           ? { ...base, mode: "LIVE" as const, provider: "anthropic", reason: "Uses the configured Anthropic model." }
           : { ...base, mode: "NOT_CONFIGURED" as const, provider: "none", reason: "Requires ANTHROPIC_API_KEY and OCR_PROVIDER=anthropic." };
       case "STORAGE":
+        if (e.STORAGE_DRIVER === "database") return { ...base, mode: "LIVE" as const, provider: "PostgreSQL (database)", reason: "Documents stored privately in the database. Suitable for demos and small volumes; use S3 for production." };
         return e.STORAGE_DRIVER === "s3"
           ? { ...base, mode: "LIVE" as const, provider: `s3 (${e.S3_BUCKET})`, reason: e.S3_ENDPOINT ? `Endpoint ${e.S3_ENDPOINT}` : "AWS S3" }
           : { ...base, mode: "DEMO" as const, provider: "local disk", reason: "STORAGE_DRIVER=local (development only)." };
