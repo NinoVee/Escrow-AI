@@ -21,7 +21,7 @@ export default async function PartiesPage({ params }: { params: Promise<{ id: st
   const sides = ["BUYER", "SELLER", "NEUTRAL"] as const;
 
   return (
-    <div className="grid gap-6 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
       <div className="space-y-6 xl:col-span-2">
         {participants.length === 0 && <EmptyState title="No participants yet">Add the buyer and seller to open escrow.</EmptyState>}
         {sides.map((side) => {

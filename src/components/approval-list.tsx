@@ -56,7 +56,7 @@ export async function ApprovalList({ ctx, approvals, showFile = true }: { ctx: C
                     {snapshot.map(([k, v]) => (
                       <div key={k} className="flex gap-1">
                         <dt className="text-slate-500">{humanize(k.replace(/Cents$/, "").replace(/([A-Z])/g, "_$1"))}:</dt>
-                        <dd className="font-medium text-slate-800">{renderValue(k, v)}</dd>
+                        <dd className="font-medium text-slate-800 [overflow-wrap:anywhere]">{renderValue(k, v)}</dd>
                       </div>
                     ))}
                   </dl>

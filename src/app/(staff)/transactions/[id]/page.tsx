@@ -29,7 +29,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
   const canEdit = hasPermission(ctx, "transaction.update") && tx.status !== "CLOSED" && tx.status !== "CANCELLED";
 
   return (
-    <div className="grid gap-6 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
       <div className="space-y-6 xl:col-span-2">
         {pendingProposals > 0 && (
           <Alert tone="warning" title={`${pendingProposals} proposed change${pendingProposals === 1 ? "" : "s"} awaiting review`}>

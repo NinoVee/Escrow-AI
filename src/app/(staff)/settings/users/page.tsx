@@ -17,7 +17,7 @@ export default async function UsersPage() {
   const staff = members.filter((m) => m.role !== "EXTERNAL");
   const external = members.filter((m) => m.role === "EXTERNAL");
   return (
-    <div className="grid gap-6 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
       <div className="space-y-6 xl:col-span-2">
         <Card title="Staff">
           <Table caption="Staff members">

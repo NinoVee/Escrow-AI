@@ -31,10 +31,10 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
       <Card title="Company configuration" className="xl:col-span-2">
         <ActionForm action={saveSettingsAction} submitLabel="Save settings" resetOnSuccess={false}>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Company name" htmlFor="name">
               <Input id="name" name="name" defaultValue={company.name} />
             </Field>
@@ -55,7 +55,7 @@ export default async function SettingsPage() {
               <Input id="retentionYearsAfterClose" name="retentionYearsAfterClose" type="number" min={1} max={50} defaultValue={settings.retentionYearsAfterClose} />
             </Field>
           </div>
-          <fieldset className="mt-2 grid gap-4 sm:grid-cols-3">
+          <fieldset className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <legend className="mb-1 text-sm font-semibold">Settlement conventions</legend>
             <Field label="Proration day count" htmlFor="prorationBasis">
               <Select id="prorationBasis" name="prorationBasis" defaultValue={settings.prorationBasis}>

@@ -22,7 +22,7 @@ export default async function DeadlinesPage({ params }: { params: Promise<{ id: 
   const canManage = hasPermission(ctx, "deadline.manage");
 
   return (
-    <div className="grid gap-6 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
       <Card title="Deadlines" className="xl:col-span-2" description="Contract dates should be verified against the executed agreement. Dates from documents show their source.">
         {deadlines.length === 0 ? (
           <EmptyState title="No deadlines yet">Add contract and contingency deadlines, or accept proposed deadlines from an uploaded agreement.</EmptyState>

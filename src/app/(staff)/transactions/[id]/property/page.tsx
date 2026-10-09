@@ -10,7 +10,7 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
   const { ctx, tx, properties } = await getWorkspace(id);
   const canEdit = hasPermission(ctx, "transaction.update");
   return (
-    <div className="grid gap-6 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
       <div className="space-y-6 xl:col-span-2">
         {properties.length === 0 ? (
           <EmptyState title="No property recorded">Add the property and parcel numbers. Commercial files can include multiple properties and parcels.</EmptyState>

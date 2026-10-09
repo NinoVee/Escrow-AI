@@ -120,7 +120,7 @@ export default async function DocumentReviewPage({ params, searchParams }: { par
       )}
       {version?.textStatus === "OCR_REQUIRED" && <Alert tone="warning">This file appears to be scanned. OCR requires the Anthropic provider (OCR_PROVIDER=anthropic with an API key). Until then, review it manually.</Alert>}
 
-      <div className="grid gap-6 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
         <Card title="Document text" className="xl:col-span-3" description="Extracted text. Highlights show excerpts cited by proposals on this page.">
           {!version || version.pages.length === 0 ? (
             <p className="text-sm text-slate-500">No extracted text yet.</p>

@@ -41,7 +41,7 @@ export default async function ReconciliationPage() {
           <h2 className="text-lg font-semibold">
             {account.name} <span className="text-sm font-normal text-slate-500">· {account.bankName} ••••{account.accountLast4} · book balance {formatCents(bookBalance)}</span>
           </h2>
-          <div className="grid gap-6 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
             {canPrepare && (
               <Card title="Import bank statement" description="CSV with date, description, amount (and transaction ID if available). Re-importing the same file or overlapping rows never creates duplicates.">
                 <ActionForm action={importAction.bind(null, account.id)} submitLabel="Import">
@@ -180,7 +180,7 @@ export default async function ReconciliationPage() {
                       </div>
                       <details className="mt-2 text-xs">
                         <summary className="cursor-pointer text-slate-600">Details</summary>
-                        <div className="mt-2 grid gap-3 md:grid-cols-2">
+                        <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
                             <div className="font-medium">Deposits in transit</div>
                             {d.depositsInTransit.length === 0 ? "None" : d.depositsInTransit.map((x) => <div key={x.entryNumber}>#{x.entryNumber} {x.date} {x.file ?? ""} {formatCents(BigInt(x.amountCents))}</div>)}

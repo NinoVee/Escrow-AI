@@ -32,7 +32,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ id: 
     <div className="space-y-6">
       <ProposalsPanel transactionId={tx.id} />
       {scanner === "demo" && <Alert tone="demo">Uploads are checked by the demo scanner (EICAR test signature only). Configure ClamAV for real malware scanning.</Alert>}
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="space-y-4 xl:col-span-2">
           {docs.length === 0 ? (
             <EmptyState title="No documents yet">Upload the purchase agreement to start. PDFs and images (PNG, JPEG, TIFF, WebP) up to {env().MAX_UPLOAD_MB} MB.</EmptyState>

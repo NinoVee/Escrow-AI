@@ -19,10 +19,10 @@ export default async function NewTransactionPage() {
   return (
     <>
       <PageHeader title="New transaction" description="Create a file manually, or upload a purchase agreement to generate proposed fields for officer review." />
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card title="Enter details manually" className="xl:col-span-2" description="Values entered here are recorded as manual entries with your name in the field history.">
           <ActionForm action={createTransactionAction} submitLabel="Create transaction" pendingLabel="Creating…">
-            <fieldset className="grid gap-4 sm:grid-cols-3">
+            <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <legend className="mb-2 text-sm font-semibold text-slate-900">File</legend>
               <Field label="Transaction type" htmlFor="type" required>
                 <Select id="type" name="type" defaultValue="RESIDENTIAL">
@@ -61,7 +61,7 @@ export default async function NewTransactionPage() {
               </Field>
             </fieldset>
 
-            <fieldset className="grid gap-4 sm:grid-cols-3">
+            <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <legend className="mb-2 mt-2 text-sm font-semibold text-slate-900">Property (add more parcels later)</legend>
               <Field label="Street address" htmlFor="street">
                 <Input id="street" name="street" autoComplete="off" />
@@ -95,7 +95,7 @@ export default async function NewTransactionPage() {
               </div>
             </fieldset>
 
-            <fieldset className="grid gap-4 sm:grid-cols-3">
+            <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <legend className="mb-2 mt-2 text-sm font-semibold text-slate-900">Principal parties</legend>
               <Field label="Buyer name" htmlFor="buyerName">
                 <Input id="buyerName" name="buyerName" />
@@ -129,7 +129,7 @@ export default async function NewTransactionPage() {
               </Field>
             </fieldset>
 
-            <fieldset className="grid gap-4 sm:grid-cols-3">
+            <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <legend className="mb-2 mt-2 text-sm font-semibold text-slate-900">Deal terms (optional)</legend>
               <Field label="Purchase price" htmlFor="purchasePriceCents" hint="e.g. 875,000.00">
                 <Input id="purchasePriceCents" name="purchasePriceCents" inputMode="decimal" />

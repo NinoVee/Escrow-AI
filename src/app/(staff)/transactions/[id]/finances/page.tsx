@@ -52,7 +52,7 @@ export default async function FinancesPage({ params }: { params: Promise<{ id: s
         EscrowFlow does not hold money, move money or replace your approved trust accounting system. Payment execution is {PAYMENT_EXECUTION_ENABLED ? "enabled" : "disabled"}: releases are recorded only after they are executed through your approved banking process.
       </Alert>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card title="File ledger" className="xl:col-span-2" description="Double-entry, integer cents. Posted entries cannot be edited; corrections are reversals." actions={<span className="text-sm">Balance held: <strong className="tabular">{formatCents(ledger.balance)}</strong></span>}>
           {ledger.entries.length === 0 ? (
             <EmptyState title="No ledger activity for this file" />
@@ -196,7 +196,7 @@ export default async function FinancesPage({ params }: { params: Promise<{ id: s
                 </tr>
               </tbody>
             </Table>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="rounded-md bg-slate-50 p-3 text-sm">
                 {statement.totals.dueFromBuyer >= 0n ? "Estimated due from buyer" : "Estimated refund to buyer"}: <strong className="tabular">{formatCents(statement.totals.dueFromBuyer >= 0n ? statement.totals.dueFromBuyer : -statement.totals.dueFromBuyer)}</strong>
               </div>
@@ -211,7 +211,7 @@ export default async function FinancesPage({ params }: { params: Promise<{ id: s
           <details className="mt-4">
             <summary className="cursor-pointer text-sm font-medium text-brand-700">Add settlement item</summary>
             <ActionForm action={addItemAction.bind(null, tx.id)} submitLabel="Add item" size="sm" className="mt-2">
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Field label="Type" htmlFor="si-kind">
                   <Select id="si-kind" name="kind" defaultValue="FEE">
                     {["FEE", "PAYOFF", "PRORATION", "SELLER_CREDIT", "HOLDBACK", "OTHER_DEBIT", "OTHER_CREDIT"].map((k) => (
@@ -262,7 +262,7 @@ export default async function FinancesPage({ params }: { params: Promise<{ id: s
         )}
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card title="Bank instructions" description="Masked. Any change creates a new version and invalidates prior verification and approvals.">
           {groups.length === 0 ? (
             <p className="text-sm text-slate-500">No bank instructions recorded.</p>
@@ -397,7 +397,7 @@ export default async function FinancesPage({ params }: { params: Promise<{ id: s
                 <Field label="Payee (must match bank instructions for wires)" htmlFor="db-payee" required>
                   <Input id="db-payee" name="payeeName" required />
                 </Field>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Method" htmlFor="db-method">
                     <Select id="db-method" name="method">
                       <option value="WIRE">Wire</option>

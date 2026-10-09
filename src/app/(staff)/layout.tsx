@@ -43,7 +43,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           <NavLink href="/settings">Settings</NavLink>
         </nav>
       </aside>
-      <div className="flex-1 lg:pl-60">
+      <div className="min-w-0 flex-1 lg:pl-60">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
           <div className="flex items-center gap-3 text-sm text-slate-600">
             {memberships.length > 1 ? <CompanySwitcher current={ctx.companyId} options={memberships.map((m) => ({ id: m.companyId, name: m.companyName }))} /> : <span className="lg:hidden">{company?.companyName}</span>}

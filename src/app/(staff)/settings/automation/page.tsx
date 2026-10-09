@@ -68,7 +68,7 @@ export default async function AutomationPage() {
         </ul>
       </Card>
       <Card title="Message templates" description="Placeholders: {{recipientName}}, {{escrowNumber}}, {{property}}, {{stage}}, {{closingDate}}, {{deadline}}, {{dueDate}}, {{items}}, {{document}}. Editing a template resets its approval.">
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {templates.map((t) => (
             <div key={t.id} className="rounded-md border border-slate-200 p-3">
               <div className="mb-2 flex flex-wrap items-center gap-2">

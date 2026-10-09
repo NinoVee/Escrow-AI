@@ -216,7 +216,7 @@ export function EmptyState({ title, children, action }: { title: string; childre
 
 export function Table({ children, caption }: { children: ReactNode; caption?: string }) {
   return (
-    <div className="-mx-4 overflow-x-auto sm:mx-0">
+    <div className="relative -mx-4 overflow-x-auto sm:mx-0">
       <table className="min-w-full divide-y divide-slate-200 text-sm">
         {caption && <caption className="sr-only">{caption}</caption>}
         {children}

@@ -1,5 +1,5 @@
 import { db, type Tx } from "../db";
-import { isExternal, requirePermission, requireUser, type Ctx } from "../context";
+import { isExternal, requirePermission, type Ctx } from "../context";
 import { invalid, notFound, precondition } from "../errors";
 import { audit } from "../audit";
 import { env } from "../env";

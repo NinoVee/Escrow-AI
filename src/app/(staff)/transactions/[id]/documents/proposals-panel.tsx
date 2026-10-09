@@ -16,7 +16,7 @@ export async function ProposalsPanel({ transactionId }: { transactionId: string 
   const canReview = hasPermission(ctx, "proposal.review");
   const conflicts = proposals.filter((p) => p.isConflict).length;
   return (
-    <div className="grid gap-6 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
       <Card
         className="xl:col-span-2"
         title={`Proposed changes awaiting review (${proposals.length})`}

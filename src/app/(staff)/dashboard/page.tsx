@@ -26,7 +26,7 @@ export default async function DashboardPage() {
         <Stat label="AI proposals to review" value={d.counts.pendingProposals} tone={d.counts.pendingProposals ? "warning" : undefined} />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card title="Upcoming and overdue deadlines" description="Pending deadlines due within 14 days, including overdue">
           {d.upcomingDeadlines.length === 0 ? (
             <EmptyState title="No deadlines in the next 14 days" />

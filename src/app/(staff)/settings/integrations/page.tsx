@@ -19,7 +19,7 @@ export default async function IntegrationsPage() {
       <Alert tone="info" title="What the modes mean">
         <strong>Not configured</strong>: unavailable. <strong>Demo</strong>: simulated, clearly labeled, never real data. <strong>Sandbox</strong>: provider test environment. <strong>Live</strong>: real provider. Vendor APIs (title, property data, e-signature, e-recording) ship as demo adapters; a live adapter needs the vendor&apos;s official API documentation and an agreement that includes API access. Payment execution is disabled. See docs/INTEGRATIONS.md.
       </Alert>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {statuses.map((s) => (
           <Card key={s.kind} title={s.label} actions={<ModeBadge mode={s.mode} />} description={s.description}>
             <dl className="space-y-1 text-sm">

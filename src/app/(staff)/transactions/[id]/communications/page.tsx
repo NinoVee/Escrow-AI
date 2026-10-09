@@ -22,7 +22,7 @@ export default async function CommunicationsPage({ params }: { params: Promise<{
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="space-y-4 xl:col-span-2">
           <h2 className="text-sm font-semibold text-slate-900">Secure portal messages</h2>
           {threads.length === 0 ? (
@@ -84,7 +84,7 @@ export default async function CommunicationsPage({ params }: { params: Promise<{
           </Card>
         )}
       </div>
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <OutboundPanel transactionId={tx.id} />
         </div>

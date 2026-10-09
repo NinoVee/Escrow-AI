@@ -23,7 +23,7 @@ export default async function TitlePage({ params }: { params: Promise<{ id: stri
       <Alert tone="warning" title="Title tracking only">
         {TITLE_DISCLAIMER}
       </Alert>
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
           <Card title="Title orders">
             {ws.orders.length === 0 ? (
