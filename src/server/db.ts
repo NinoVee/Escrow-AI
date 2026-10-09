@@ -7,7 +7,10 @@ function createClient() {
   // Serverless instances each hold their own pool; keep it small and use a pooled DATABASE_URL.
   const max = Number(process.env.DB_POOL_MAX) || (process.env.VERCEL === "1" ? 3 : 10);
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL, max });
-  return new PrismaClient({ adapter });
+  // Interactive transactions: allow for network latency to a hosted database
+  // (Prisma's 5 s default is too tight when the database is not co-located).
+  const transactionOptions = { maxWait: Number(process.env.DB_TX_MAX_WAIT_MS) || 10_000, timeout: Number(process.env.DB_TX_TIMEOUT_MS) || 20_000 };
+  return new PrismaClient({ adapter, transactionOptions });
 }
 
 export const db: PrismaClient = globalForPrisma.__prisma ?? createClient();

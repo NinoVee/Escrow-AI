@@ -71,9 +71,10 @@ Set these in Project Settings → Environment Variables. Use separate values for
 | `EXTERNAL_SEND_ENABLED` | `false`. Keep it off unless you intend to send real email. |
 | `SMTP_*` | Only if you will send email |
 | `ESIGN_WEBHOOK_SECRET`, `RECORDING_WEBHOOK_SECRET`, `TITLE_WEBHOOK_SECRET` | `openssl rand -hex 24` each. Needed for the demo provider simulations. |
-| `SEED_DEMO_DATA` | `true` loads the **fictional** demo data on the next production build. It is skipped if the data already exists. Remove it afterwards. The demo passwords are public, so use it only with Deployment Protection on. |
+| `SEED_DEMO_DATA` | `true` loads the **fictional** demo data on the next production build. It is skipped once the data is complete. If an earlier run failed part-way, it clears that run's partial data and starts again. It only does that when the database holds nothing but the two demo companies. Remove it afterwards. The demo passwords are public, so use it only with Deployment Protection on. |
 | `MIGRATE_ON_BUILD` | Default: `true` for production builds, `false` for previews. Set `true` on a preview only if it has its own database. |
 | `DB_POOL_MAX` | `3` on Vercel |
+| `DB_TX_TIMEOUT_MS` | `20000`. Time limit for one database transaction. Raise it if a distant database causes "expired transaction" errors. Better still, put the functions' region next to the database. |
 | `JOBS_MODE` | Leave unset; Vercel uses `deferred`. `queue` requires a BullMQ worker hosted elsewhere, pointed at the same database and Redis. |
 
 Do **not** set `REDIS_URL` unless you also run an external worker with `JOBS_MODE=queue`.

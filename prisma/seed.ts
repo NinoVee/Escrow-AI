@@ -11,7 +11,8 @@ import "dotenv/config";
 process.env.JOBS_MODE ??= "inline";
 import { db } from "../src/server/db";
 import { symmetricEncrypt } from "better-auth/crypto";
-import { userCtx, type Ctx } from "../src/server/context";
+import { systemCtx, userCtx, type Ctx } from "../src/server/context";
+import { audit } from "../src/server/audit";
 import { createUserWithPassword, inviteParticipantToPortal } from "../src/server/services/users";
 import { installDefaultTemplates } from "../src/server/services/templates";
 import { installDefaultLedger } from "../src/server/services/reconciliation";
@@ -51,11 +52,32 @@ export interface SeedContext {
   tx: Record<string, string>;
 }
 
-async function main() {
-  if (await db.company.findUnique({ where: { slug: "golden-oak-escrow" } })) {
+const DEMO_SLUGS = ["golden-oak-escrow", "harbor-line-escrow"];
+const COMPLETED_ACTION = "demo.seed_completed";
+
+/**
+ * Seed state: "complete" (skip), "empty" (seed), or "partial" (an earlier run
+ * failed part-way). Partial demo data is cleared only when the database holds
+ * nothing but the demo companies, so real data is never touched.
+ */
+async function prepare(): Promise<boolean> {
+  const golden = await db.company.findUnique({ where: { slug: DEMO_SLUGS[0] } });
+  if (!golden) return true;
+  if (await db.auditEvent.findFirst({ where: { companyId: golden.id, action: COMPLETED_ACTION } })) {
     console.log("Demo data already present. Reset the database first (see README) to reseed.");
-    return;
+    return false;
   }
+  const others = await db.company.count({ where: { slug: { notIn: DEMO_SLUGS } } });
+  if (others > 0) throw new Error("Found partial demo data next to other companies; refusing to clear anything. Remove the demo companies manually, then seed again.");
+  console.log("Found partial demo data from an earlier failed run; clearing it before seeding again.");
+  // TRUNCATE (not DELETE) because audit and ledger tables reject row deletes by design.
+  const tables = await db.$queryRaw<{ tablename: string }[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
+  await db.$executeRawUnsafe(`TRUNCATE ${tables.map((t) => `"${t.tablename}"`).join(", ")} RESTART IDENTITY CASCADE`);
+  return true;
+}
+
+async function main() {
+  if (!(await prepare())) return;
   console.log("Seeding fictional demo data…");
 
   const golden = await db.company.create({
@@ -81,14 +103,17 @@ async function main() {
   }
   const ctx = (key: string): Ctx => userCtx({ userId: users[key], companyId: roles[key].companyId, role: roles[key].role, userName: roles[key].name, sessionId: `seed-${key}` });
 
-  await db.$transaction(async (client) => {
+  await db.$transaction(
+    async (client) => {
     await installDefaultTemplates(client, golden.id, users.admin);
     await installDefaultTemplates(client, harbor.id, users.harborAdmin);
     await installDefaultLedger(client, golden.id, { name: "Escrow trust account (demo)", bankName: "Sierra Community Bank (fictional)", last4: "4821" });
     await installDefaultLedger(client, harbor.id, { name: "Escrow trust account (demo)", bankName: "Bayshore Bank (fictional)", last4: "7710" });
     await installDefaultAutomation(client, golden.id);
     await installDefaultAutomation(client, harbor.id);
-  });
+    },
+    { timeout: 120_000, maxWait: 30_000 },
+  );
 
   const officer = ctx("officer");
   const assistant = ctx("assistant");
@@ -279,6 +304,7 @@ async function main() {
   await seedPhase2(seedCtx);
   await seedPhase3(seedCtx);
   await seedPhase4(seedCtx);
+  await audit(systemCtx(golden.id, "seed"), { action: COMPLETED_ACTION, entityType: "Company", entityId: golden.id, summary: "Fictional demo data loaded" });
 
   console.log("Done. Sign in with any demo account from the README (password: EscrowFlow-Demo-2026!).");
 }
