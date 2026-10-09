@@ -7,6 +7,8 @@
  * Run on an empty database: `npm run db:seed` (after `npx prisma migrate deploy`).
  */
 import "dotenv/config";
+// Run background work in-process while seeding so results exist without a worker.
+process.env.JOBS_MODE ??= "inline";
 import { db } from "../src/server/db";
 import { symmetricEncrypt } from "better-auth/crypto";
 import { userCtx, type Ctx } from "../src/server/context";

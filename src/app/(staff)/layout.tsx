@@ -6,6 +6,7 @@ import { NavLink } from "@/components/nav-link";
 import { SignOutButton } from "@/components/sign-out-button";
 import { db } from "@/server/db";
 import { aiMode } from "@/server/ai/provider";
+import { unreadNotificationCount } from "@/server/services/operations";
 import { CompanySwitcher } from "./company-switcher";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +15,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   const memberships = (await getMemberships(ctx.userId!)).filter((m) => m.role !== "EXTERNAL");
   const company = memberships.find((m) => m.companyId === ctx.companyId);
   const pending = await db.approval.count({ where: { companyId: ctx.companyId, status: "PENDING", NOT: { requestedById: ctx.userId! } } });
+  const unread = await unreadNotificationCount(ctx);
   const demoAi = aiMode() === "DEMO";
 
   return (
@@ -35,6 +37,9 @@ export default async function StaffLayout({ children }: { children: React.ReactN
             Approvals
           </NavLink>
           {hasPermission(ctx, "recon.prepare") || hasPermission(ctx, "ledger.read") ? <NavLink href="/reconciliation">Reconciliation</NavLink> : null}
+          <NavLink href="/notifications" badge={unread}>
+            Notifications
+          </NavLink>
           <NavLink href="/settings">Settings</NavLink>
         </nav>
       </aside>

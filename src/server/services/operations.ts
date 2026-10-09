@@ -40,3 +40,15 @@ export async function markNotificationsRead(ctx: Ctx) {
   const userId = requireUser(ctx);
   await db.notification.updateMany({ where: { companyId: ctx.companyId, userId, readAt: null }, data: { readAt: new Date() } });
 }
+
+/** Webhook events for these provider references that are still waiting to be processed. */
+export async function pendingProviderEvents(subjectRefs: string[]) {
+  if (!subjectRefs.length) return 0;
+  return db.webhookEvent.count({ where: { subjectRef: { in: subjectRefs }, status: "RECEIVED", receivedAt: { gte: new Date(Date.now() - 2 * 60_000) } } });
+}
+
+/** True when an approved email is still being handed to the delivery job. */
+export function isDelivering(messages: { status: string; updatedAt: Date }[]) {
+  const cutoff = Date.now() - 5 * 60_000;
+  return messages.some((m) => (m.status === "APPROVED" || m.status === "SENDING") && m.updatedAt.getTime() > cutoff);
+}

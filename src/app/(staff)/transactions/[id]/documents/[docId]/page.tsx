@@ -12,6 +12,7 @@ import { applyCategoryAction, runExtractionAction } from "../../ai-actions";
 import { displayDateTime } from "@/lib/dates";
 import { CompareDocuments } from "./compare";
 import type { InjectionFlag } from "@/server/ai/text";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 function highlight(text: string, excerpts: string[]) {
   const ranges: [number, number][] = [];
@@ -50,6 +51,8 @@ export default async function DocumentReviewPage({ params, searchParams }: { par
     db.document.findMany({ where: { transactionId: tx.id, id: { not: doc.id }, archivedAt: null, currentVersionId: { not: null } }, select: { title: true, currentVersionId: true } }),
     staffNames(ctx.companyId),
   ]);
+  const job = version ? await db.jobRun.findUnique({ where: { idempotencyKey: `document.process:${version.id}` }, select: { status: true, lastError: true } }) : null;
+  const processing = Boolean(job && (job.status === "QUEUED" || job.status === "RUNNING" || (job.status === "FAILED" && runs.length === 0)));
   const latest = runs.find((r) => r.status === "SUCCEEDED");
   const pending = proposals.filter((p) => p.status === "PENDING");
   const decided = proposals.filter((p) => p.status !== "PENDING");
@@ -198,6 +201,17 @@ export default async function DocumentReviewPage({ params, searchParams }: { par
             )}
           </Card>
 
+          <AutoRefresh active={processing} />
+          {processing && (
+            <Alert tone="info" title="Processing document">
+              Reading text and extracting proposals in the background. This page updates automatically.
+            </Alert>
+          )}
+          {job?.status === "DEAD" && runs.length === 0 && (
+            <Alert tone="danger" title="Processing failed">
+              {job.lastError ?? "Background processing failed."} An administrator can replay it from Settings → Jobs, or run extraction here.
+            </Alert>
+          )}
           <Card title={`Proposals from this document (${pending.length} pending)`}>
             {pending.length === 0 ? (
               <p className="text-sm text-slate-500">No pending proposals.</p>

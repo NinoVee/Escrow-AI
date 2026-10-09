@@ -6,6 +6,7 @@ import { Alert, Badge, Card, EmptyState, Field, Input, ModeBadge, Select, Status
 import { addExceptionAction, dispositionAction, linkReportAction, titleOrderAction } from "../actions";
 import { displayDateTime } from "@/lib/dates";
 import { TitleExtras } from "./extras";
+import { ProviderPanels } from "./provider";
 
 const DISPOSITIONS = ["OPEN", "TO_BE_PAID_OFF", "TO_BE_REMOVED", "BUYER_APPROVED", "CLEARED_BY_TITLE", "NO_ACTION_NEEDED"];
 const CATEGORIES = ["TAXES", "DEED_OF_TRUST", "LIEN", "JUDGMENT", "EASEMENT", "CCRS", "HOA", "REQUIREMENT", "OTHER"];
@@ -115,6 +116,7 @@ export default async function TitlePage({ params }: { params: Promise<{ id: stri
             )}
           </Card>
           <TitleExtras transactionId={tx.id} />
+          <ProviderPanels transactionId={tx.id} />
         </div>
         {canManage && (
           <div className="space-y-6">
