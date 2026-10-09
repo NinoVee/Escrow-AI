@@ -71,6 +71,7 @@ Set these in Project Settings → Environment Variables. Use separate values for
 | `EXTERNAL_SEND_ENABLED` | `false`. Keep it off unless you intend to send real email. |
 | `SMTP_*` | Only if you will send email |
 | `ESIGN_WEBHOOK_SECRET`, `RECORDING_WEBHOOK_SECRET`, `TITLE_WEBHOOK_SECRET` | `openssl rand -hex 24` each. Needed for the demo provider simulations. |
+| `SEED_DEMO_DATA` | `true` loads the **fictional** demo data on the next production build. It is skipped if the data already exists. Remove it afterwards. The demo passwords are public, so use it only with Deployment Protection on. |
 | `MIGRATE_ON_BUILD` | Default: `true` for production builds, `false` for previews. Set `true` on a preview only if it has its own database. |
 | `DB_POOL_MAX` | `3` on Vercel |
 | `JOBS_MODE` | Leave unset; Vercel uses `deferred`. `queue` requires a BullMQ worker hosted elsewhere, pointed at the same database and Redis. |
@@ -89,7 +90,8 @@ Deploy from the Vercel dashboard or by pushing to the production branch. In the 
 
 There is no public sign-up.
 
-- **Demo deployment.** From your machine, run the seed against the deployed database and bucket. Only do this on a protected deployment (see the warning at the top).
+- **Demo deployment, easiest way.** Add `SEED_DEMO_DATA=true` to the Production environment and redeploy. The build applies the migrations and then loads the demo data. Remove the variable afterwards.
+- **Demo deployment, from your machine.** Run the seed against the deployed database and bucket. Only do this on a protected deployment (see the warning at the top).
 
   ```bash
   DATABASE_URL="<direct url>" STORAGE_DRIVER=s3 S3_BUCKET=… S3_REGION=… \
