@@ -119,6 +119,13 @@ describe("Vercel deployment support", () => {
     expect(await ok.json()).toMatchObject({ sweep: { considered: expect.any(Number) } });
   });
 
+  it("defaults to database storage on Vercel when STORAGE_DRIVER is unset", () => {
+    setEnv({ VERCEL: "1", STORAGE_DRIVER: undefined });
+    expect(env().STORAGE_DRIVER).toBe("database");
+    setEnv({ VERCEL: undefined });
+    expect(env().STORAGE_DRIVER).toBe("local");
+  });
+
   it("refuses local disk storage on Vercel", async () => {
     setEnv({ VERCEL: "1", STORAGE_DRIVER: "local" });
     vi.resetModules();

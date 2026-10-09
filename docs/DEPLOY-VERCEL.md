@@ -55,7 +55,7 @@ Set these in Project Settings → Environment Variables. Use separate values for
 | `BETTER_AUTH_SECRET` | `openssl rand -base64 48` |
 | `DOWNLOAD_SIGNING_SECRET` | `openssl rand -base64 48` |
 | `FIELD_ENCRYPTION_KEY` | `openssl rand -base64 32`. This encrypts bank details; **back it up**, because data encrypted with it cannot be recovered without it. |
-| `STORAGE_DRIVER` | `database` (simplest), or `s3` with the variables below |
+| `STORAGE_DRIVER` | Leave unset to use `database`, the default on Vercel. Set `s3` to use a bucket (variables below). |
 | `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Only for `s3`: your bucket |
 | `S3_ENDPOINT` | Only for `s3`. Leave empty for AWS. Set it for R2, MinIO and similar. |
 | `S3_FORCE_PATH_STYLE` | Only for `s3`. `false` for AWS. Usually `true` for MinIO. |

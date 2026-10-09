@@ -22,7 +22,8 @@ const EnvSchema = z.object({
   /** HMAC key for short-lived download links and webhook test signatures */
   DOWNLOAD_SIGNING_SECRET: z.string().min(32),
 
-  STORAGE_DRIVER: z.enum(["local", "s3", "database"]).default("local"),
+  /** Default: "database" on Vercel (no persistent disk), "local" elsewhere. */
+  STORAGE_DRIVER: z.enum(["local", "s3", "database"]).default(() => (process.env.VERCEL === "1" ? "database" : "local")),
   STORAGE_LOCAL_DIR: z.string().default("./storage"),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default("us-west-2"),

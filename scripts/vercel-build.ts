@@ -22,7 +22,7 @@ need("DATABASE_URL", (v) => /^postgres(ql)?:\/\//.test(v), "PostgreSQL URL; use 
 need("BETTER_AUTH_SECRET", (v) => v.length >= 32, "openssl rand -base64 48");
 need("DOWNLOAD_SIGNING_SECRET", (v) => v.length >= 32, "openssl rand -base64 48");
 need("FIELD_ENCRYPTION_KEY", (v) => Buffer.from(v, "base64").length === 32, "32 bytes, base64: openssl rand -base64 32");
-if (env.VERCEL === "1" && env.STORAGE_DRIVER !== "s3" && env.STORAGE_DRIVER !== "database") errors.push('STORAGE_DRIVER must be "database" (simplest; documents stored in PostgreSQL) or "s3" on Vercel, because function file systems are temporary');
+if (env.VERCEL === "1" && env.STORAGE_DRIVER === "local") errors.push('STORAGE_DRIVER=local cannot be used on Vercel (function file systems are temporary). Remove it to store documents in PostgreSQL, or use "s3".');
 else if (env.STORAGE_DRIVER === "s3") for (const n of ["S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"]) need(n);
 if (env.JOBS_MODE === "queue") warnings.push("JOBS_MODE=queue needs a separately hosted BullMQ worker; Vercel cannot run it. Leave JOBS_MODE unset to use deferred jobs.");
 if (!env.CRON_SECRET) warnings.push("CRON_SECRET is not set: failed jobs will not be retried and automation rules will not run on schedule.");
