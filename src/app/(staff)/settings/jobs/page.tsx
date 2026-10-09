@@ -11,6 +11,12 @@ import { replayAction } from "../ops-actions";
 
 export const metadata: Metadata = { title: "Jobs" };
 
+const MODE_LABELS = {
+  queue: "queue (BullMQ worker)",
+  inline: "inline (in the web process)",
+  deferred: "deferred (after each response; failed jobs retried by the scheduled sweep)",
+} as const;
+
 export default async function JobsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireStaffCtx();
   requirePermission(ctx, "jobs.manage");
@@ -19,7 +25,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   return (
     <div className="space-y-6">
       <Alert tone="info">
-        Mode: <strong>{jobsMode() === "queue" ? "queue (BullMQ worker)" : "inline (in the web process)"}</strong>. Jobs retry with exponential backoff and become <em>dead</em> after their maximum attempts. Replaying is safe: every handler is idempotent and re-checks its gates.
+        Mode: <strong>{MODE_LABELS[jobsMode()]}</strong>. Jobs retry with exponential backoff and become <em>dead</em> after their maximum attempts. Replaying is safe: every handler is idempotent and re-checks its gates.
       </Alert>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "DEAD"].map((s) => (

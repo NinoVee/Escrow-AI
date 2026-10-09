@@ -9,17 +9,24 @@ import type { Prisma } from "@/generated/prisma/client";
  *   unique idempotency key, status, attempts, last error, replay count.
  * - BullMQ (Redis) delivers jobs to workers with retries and exponential
  *   backoff. The BullMQ job id is the JobRun id, so a job is never queued twice.
- * - JOBS_MODE=inline runs jobs in-process (tests, or local use without Redis).
+ * - JOBS_MODE=inline runs jobs in-process before returning (tests, or local use without Redis).
+ * - JOBS_MODE=deferred runs jobs in-process right after the response is sent
+ *   (Next.js `after`), for serverless hosts such as Vercel with no worker. Failed
+ *   jobs are retried by the cron sweep (/api/cron/jobs).
  * Payloads carry ids only, never secrets or document contents.
  */
 export const QUEUE_NAME = "escrowflow";
 
 export type JobType = "document.process" | "email.send" | "webhook.process" | "automation.company";
 
-export function jobsMode(): "inline" | "queue" {
+export type JobsMode = "inline" | "deferred" | "queue";
+
+export function jobsMode(): JobsMode {
   const m = process.env.JOBS_MODE;
-  if (m === "inline" || m === "queue") return m;
-  return process.env.REDIS_URL && process.env.NODE_ENV !== "test" ? "queue" : "inline";
+  if (m === "inline" || m === "queue" || m === "deferred") return m;
+  if (process.env.NODE_ENV === "test") return "inline";
+  if (process.env.VERCEL === "1") return "deferred";
+  return process.env.REDIS_URL ? "queue" : "inline";
 }
 
 export function redisConnection() {
@@ -76,13 +83,28 @@ export async function enqueueJob(type: JobType, payload: Record<string, unknown>
 }
 
 async function dispatch(jobRunId: string, maxAttempts: number, delayMs: number) {
-  if (jobsMode() === "inline") {
-    const { runJob } = await import("./runner");
-    try {
-      await runJob(jobRunId);
-    } catch (e) {
-      log.warn("inline job failed (recorded on JobRun)", { jobRunId, error: e });
+  const mode = jobsMode();
+  if (mode === "inline" || mode === "deferred") {
+    const run = async () => {
+      const { runJob } = await import("./runner");
+      try {
+        await runJob(jobRunId);
+      } catch (e) {
+        log.warn("in-process job failed (recorded on JobRun; the sweep retries it)", { jobRunId, error: e });
+      }
+    };
+    if (mode === "deferred" && delayMs === 0) {
+      try {
+        const { after } = await import("next/server");
+        after(run);
+        return;
+      } catch {
+        // Not inside a request (scripts, seed): run now instead.
+      }
     }
+    // Delayed jobs in in-process modes are left QUEUED for the sweep to pick up after runAfter.
+    if (delayMs > 0) return;
+    await run();
     return;
   }
   const q = await getQueue();

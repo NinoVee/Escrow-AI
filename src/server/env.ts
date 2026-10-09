@@ -9,7 +9,12 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().optional(),
-  APP_URL: z.string().url().default("http://localhost:3000"),
+  /** Public base URL. On Vercel it may be omitted; see appUrl(). */
+  APP_URL: z.string().url().optional(),
+  /** Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` to /api/cron/jobs. */
+  CRON_SECRET: z.string().min(16).optional(),
+  /** Max database connections per server instance (keep small on serverless). */
+  DB_POOL_MAX: z.coerce.number().int().positive().optional(),
 
   BETTER_AUTH_SECRET: z.string().min(32, "BETTER_AUTH_SECRET must be at least 32 characters"),
   /** base64-encoded 32-byte key for AES-256-GCM field encryption */
@@ -72,8 +77,29 @@ export function env(): Env {
       throw new Error(`Invalid server environment: ${issues}`);
     }
     cached = parsed.data;
+    // Vercel Functions reject request bodies over 4.5 MB, so larger uploads cannot arrive anyway.
+    if (isVercel()) cached = { ...cached, MAX_UPLOAD_MB: Math.min(cached.MAX_UPLOAD_MB, VERCEL_MAX_UPLOAD_MB) };
   }
   return cached;
+}
+
+export const VERCEL_MAX_UPLOAD_MB = 4;
+
+/** True when running on Vercel (build or functions). */
+export function isVercel() {
+  return process.env.VERCEL === "1";
+}
+
+/**
+ * Public base URL used by authentication (cookies, origin checks).
+ * APP_URL wins; on Vercel previews it falls back to the deployment URL so each
+ * preview signs users in on its own origin.
+ */
+export function appUrl(): string {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
+  if (process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
 }
 
 /** For tests that mutate process.env. */

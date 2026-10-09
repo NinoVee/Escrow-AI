@@ -12,9 +12,11 @@ Administrative workflow support for residential and commercial escrow staff. Thi
 - [Demo accounts](#demo-accounts)
 - [What it does](#what-it-does)
 - [Demo-only behavior, missing live integrations, production requirements](#demo-only-behavior-missing-live-integrations-production-requirements)
+- [Deploying to Vercel](#deploying-to-vercel)
 - [Commands](#commands)
 - [Project layout](#project-layout)
 - Documentation:
+  - [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md): Vercel deployment
   - [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md): integration setup
   - [docs/SECURITY.md](docs/SECURITY.md): security model
   - [docs/FINANCIAL-CONTROLS.md](docs/FINANCIAL-CONTROLS.md): ledger and payment controls
@@ -221,12 +223,21 @@ The Anthropic adapter is implemented and unit-tested with mocks, but it was **no
 - WORM audit storage
 - key management
 
+## Deploying to Vercel
+
+The app is ready to deploy on Vercel with a hosted PostgreSQL database and a private S3-compatible bucket. Redis and a worker are not needed: background jobs run right after each response, and a Vercel Cron job retries failures and runs automation rules.
+
+`npm run vercel-build` checks the configuration, applies migrations on production builds, and builds the app. Full steps, environment variables and limits (4 MB uploads, no ClamAV) are in [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md).
+
+**Turn on Vercel Deployment Protection.** The demo accounts' credentials are published in this README.
+
 ## Commands
 
 | Command | Purpose |
 |---|---|
 | `npm run dev` / `npm run build` / `npm start` | Next.js dev server / production build / production server |
-| `npm run worker` | Background worker (BullMQ). Also runs the automation scheduler every 15 minutes. |
+| `npm run worker` | Background worker (BullMQ). Also runs the automation scheduler every 15 minutes. Not used on Vercel. |
+| `npm run vercel-build` | Vercel build: environment check, migrations (production), `next build` |
 | `npm run typecheck` | TypeScript |
 | `npm run lint` | ESLint |
 | `npm test` | Vitest unit and integration tests. Uses the `escrowflow_test` database, migrated automatically. |

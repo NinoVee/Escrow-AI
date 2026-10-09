@@ -112,6 +112,7 @@ export function storage(): StorageDriver {
       if (!e.S3_BUCKET) throw new Error("S3_BUCKET is required when STORAGE_DRIVER=s3");
       driver = new S3Storage(e.S3_BUCKET);
     } else {
+      if (process.env.VERCEL === "1") throw new Error("STORAGE_DRIVER=local cannot be used on Vercel: function file systems are temporary. Set STORAGE_DRIVER=s3 and the S3_* variables (see docs/DEPLOY-VERCEL.md).");
       driver = new LocalStorage(e.STORAGE_LOCAL_DIR);
     }
   }

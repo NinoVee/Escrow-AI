@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "tsx scripts/vercel-build.ts",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit -p .",
@@ -56,5 +57,8 @@
     "typescript": "^5",
     "vitest": "^5.0.3"
   },
-  "type": "module"
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  }
 }

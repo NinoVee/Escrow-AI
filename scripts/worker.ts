@@ -7,22 +7,14 @@
  */
 import "dotenv/config";
 import { Worker, Queue } from "bullmq";
-import { QUEUE_NAME, redisConnection, enqueueJob } from "../src/server/jobs/queue";
+import { QUEUE_NAME, redisConnection } from "../src/server/jobs/queue";
+import { AUTOMATION_WINDOW_MS, automationTick } from "../src/server/jobs/sweep";
 import { runJob } from "../src/server/jobs/runner";
 import { db } from "../src/server/db";
 import { log } from "../src/server/logger";
 
-const TICK_MS = 15 * 60_000;
+const TICK_MS = AUTOMATION_WINDOW_MS;
 const SCHEDULER = "automation-tick";
-
-async function automationTick() {
-  const window = Math.floor(Date.now() / TICK_MS);
-  const companies = await db.automationRule.findMany({ where: { enabled: true }, distinct: ["companyId"], select: { companyId: true } });
-  for (const c of companies) {
-    await enqueueJob("automation.company", {}, { companyId: c.companyId, idempotencyKey: `automation:${c.companyId}:${window}`, maxAttempts: 3 });
-  }
-  return { companies: companies.length };
-}
 
 async function main() {
   if (process.env.JOBS_MODE === "inline") throw new Error("JOBS_MODE=inline runs jobs in the web process; the worker is not needed.");

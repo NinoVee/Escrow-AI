@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { twoFactor } from "better-auth/plugins";
 import { db } from "../db";
+import { appUrl } from "../env";
 
 /**
  * Better Auth: email/password with TOTP second factor.
@@ -13,7 +14,9 @@ import { db } from "../db";
  */
 export const auth = betterAuth({
   appName: "EscrowFlow",
-  baseURL: process.env.APP_URL ?? "http://localhost:3000",
+  baseURL: appUrl(),
+  // Vercel deployments are reachable at their unique URL and their branch alias.
+  trustedOrigins: [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL].filter((h): h is string => Boolean(h)).map((h) => `https://${h}`),
   secret: process.env.BETTER_AUTH_SECRET,
   database: prismaAdapter(db, { provider: "postgresql" }),
   emailAndPassword: {

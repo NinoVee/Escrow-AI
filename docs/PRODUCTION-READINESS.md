@@ -94,3 +94,4 @@ The legend for the Status column is:
 | 7.2 | Pilot with a limited set of files, running the existing process in parallel, with written go/no-go criteria. | Management | ☐ |
 | 7.3 | Accessibility review (WCAG 2.2 AA) of the staff app and the portal. | Product | ◐ Semantic markup and labels; not audited |
 | 7.4 | Support process and a status page for participants. | Operations | ☐ |
+| 7.5 | Hosting decision. If you use Vercel: Deployment Protection, function region near the database, a cron schedule suited to the plan, direct-to-S3 uploads for files over 4 MB, a malware-scanning service (see DEPLOY-VERCEL.md), and a script to create the first company and administrator instead of the demo seed. | Platform | ◐ Vercel build, deferred jobs and cron sweep implemented |

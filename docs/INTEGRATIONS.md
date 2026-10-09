@@ -149,7 +149,10 @@ Production checklist for webhooks: rotate secrets, restrict source IPs where the
 
 ## Background jobs
 
-- **Modes.** `JOBS_MODE=queue` (the default when `REDIS_URL` is set) uses BullMQ, and you must run `npm run worker`. `JOBS_MODE=inline` runs jobs in the web process; use it for tests or a single-process demo.
+- **Modes:**
+  - `JOBS_MODE=queue` (the default when `REDIS_URL` is set) uses BullMQ, and you must run `npm run worker`.
+  - `JOBS_MODE=deferred` (the default on Vercel) runs each job right after the response is sent. A scheduled sweep (`/api/cron/jobs`, protected by `CRON_SECRET`) retries failed jobs with exponential backoff, recovers stalled ones and runs the automation rules. See [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md).
+  - `JOBS_MODE=inline` runs jobs before the response returns. Use it for tests or a single-process demo.
 - **Job types:**
   - `document.process`: text, OCR and extraction
   - `email.send`

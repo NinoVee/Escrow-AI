@@ -12,9 +12,11 @@ These results were recorded on 2026-10-09 against the commit that adds this file
 |---|---|---|
 | Typecheck | `npm run typecheck` | **Pass** (0 errors) |
 | Lint | `npm run lint -- --max-warnings=0` | **Pass** (0 errors, 0 warnings) |
-| Unit and integration tests | `npm test` | **125 passed**, 0 failed (9 files) |
+| Unit and integration tests | `npm test` | **134 passed**, 0 failed (10 files) |
 | Production build | `npm run build` | **Pass** |
-| End-to-end | `npm run test:e2e` | **29 passed**, 0 failed. Production build, `next start`, BullMQ worker, freshly seeded database. |
+| End-to-end (worker) | `npm run test:e2e` | **29 passed**, 0 failed. Production build, `next start`, BullMQ worker, freshly seeded database. |
+| End-to-end (Vercel job mode) | `JOBS_MODE=deferred` server, **no worker** | **29 passed**, 0 failed. Every document, email and webhook job completed through `after()`. |
+| Vercel build simulation | `VERCEL=1 npm run vercel-build` | Missing configuration fails with a list (exit 1). A valid preview build skips migrations; a valid production build applies them. Both build successfully. |
 | Dependency audit | `npm audit --omit=dev` | 4 high-severity advisories, all transitive (see below) |
 
 Passing these checks shows the implemented behavior works as tested. It does **not** establish production readiness (see [PRODUCTION-READINESS.md](PRODUCTION-READINESS.md)).
@@ -34,6 +36,18 @@ Passing these checks shows the implemented behavior works as tested. It does **n
 | **Approval invalidation on bank-detail or amount change** | `payments.test.ts`: approval is invalidated when the amount changes; verification and approval are invalidated when bank details change; a change between request and decision is detected. `workflow.test.ts`: a stage approval is invalidated when the file moves. |
 | **Preparer/approver separation** | `payments.test.ts`: separate preparer and approver, plus step-up; release recorded by someone other than the preparer; independent bank verification. `reconciliation.test.ts`: a different reviewer, with step-up. `workflow.test.ts`: approvals need a different person. `integrations.test.ts`: the email requester cannot approve; template editor and approver are separated. e2e: approval inbox and disbursement flows. |
 | **Closing blocked by unresolved items** | `workflow.test.ts`: closing is blocked by unresolved required tasks (even with an override), open blockers and incomplete milestones. `payments.test.ts`: closing is blocked by unreleased disbursements and a non-zero file balance. e2e: closing stays blocked while the file ledger is not zero. |
+
+Deployment coverage in `deploy.test.ts`:
+
+- public URL derivation (APP_URL, Vercel production domain, preview URL)
+- the 4 MB upload cap on Vercel
+- the deferred job mode, with its fallback outside a request
+- the backoff schedule
+- the sweep retrying failed jobs only after backoff, then marking them DEAD
+- recovery of lost QUEUED and stalled RUNNING jobs
+- automation enqueued once per window
+- the cron endpoint requiring its bearer token
+- local disk storage refused on Vercel
 
 Additional Phase 4 coverage in `integrations.test.ts`:
 
