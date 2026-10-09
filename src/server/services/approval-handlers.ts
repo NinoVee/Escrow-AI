@@ -94,3 +94,24 @@ registerApprovalHandler("RECONCILIATION", {
     }
   },
 });
+
+registerApprovalHandler("COMMUNICATION_SEND", {
+  async currentBinding(client, approval) {
+    const m = await client.outboundMessage.findUnique({ where: { id: approval.subjectId } });
+    if (!m || m.status !== "PENDING_APPROVAL") return null;
+    const { outboundBinding } = await import("./outbound");
+    return outboundBinding(m);
+  },
+  async within(client, ctx, approval, decision) {
+    await client.outboundMessage.update({
+      where: { id: approval.subjectId },
+      data: decision === "APPROVED" ? { status: "APPROVED" } : { status: "DRAFT", blockedReason: `Not approved: ${approval.decisionNote ?? "no reason given"}` },
+    });
+    void ctx;
+  },
+  async after(ctx, approval, decision) {
+    if (decision !== "APPROVED") return;
+    const { queueSend } = await import("./outbound");
+    await queueSend(ctx.companyId, approval.subjectId);
+  },
+});

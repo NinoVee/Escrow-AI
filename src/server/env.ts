@@ -50,7 +50,7 @@ const EnvSchema = z.object({
 
   ESIGN_WEBHOOK_SECRET: z.string().optional(),
   RECORDING_WEBHOOK_SECRET: z.string().optional(),
-  BANK_WEBHOOK_SECRET: z.string().optional(),
+  TITLE_WEBHOOK_SECRET: z.string().optional(),
 
   ATTOM_API_KEY: z.string().optional(),
   DATATREE_CLIENT_ID: z.string().optional(),

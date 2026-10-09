@@ -13,6 +13,7 @@ import { userCtx, type Ctx } from "../src/server/context";
 import { createUserWithPassword, inviteParticipantToPortal } from "../src/server/services/users";
 import { installDefaultTemplates } from "../src/server/services/templates";
 import { installDefaultLedger } from "../src/server/services/reconciliation";
+import { installDefaultAutomation } from "../src/server/services/automation";
 import { addEntitySigner, addParcel, addParticipant, addProperty, createTransaction, requestSignerReview } from "../src/server/services/transactions";
 import { createDeadline, createTask, resolveTask } from "../src/server/services/tasks";
 import { createDocumentRequest, shareDocument, uploadDocument } from "../src/server/services/documents";
@@ -83,6 +84,8 @@ async function main() {
     await installDefaultTemplates(client, harbor.id, users.harborAdmin);
     await installDefaultLedger(client, golden.id, { name: "Escrow trust account (demo)", bankName: "Sierra Community Bank (fictional)", last4: "4821" });
     await installDefaultLedger(client, harbor.id, { name: "Escrow trust account (demo)", bankName: "Bayshore Bank (fictional)", last4: "7710" });
+    await installDefaultAutomation(client, golden.id);
+    await installDefaultAutomation(client, harbor.id);
   });
 
   const officer = ctx("officer");

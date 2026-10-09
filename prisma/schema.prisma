@@ -1428,3 +1428,187 @@ model Disbursement {
 
   @@index([companyId, transactionId, status])
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4: integrations, jobs, webhooks, communications automation
+// ---------------------------------------------------------------------------
+
+/// Admin-selected mode per integration kind. The effective mode shown in the
+/// UI also depends on whether an adapter exists and credentials are present.
+model IntegrationConfig {
+  id          String          @id @default(cuid())
+  companyId   String
+  kind        String
+  provider    String
+  mode        IntegrationMode @default(DEMO)
+  settings    Json            @default("{}")
+  updatedById String?
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([companyId, kind])
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  DEAD
+}
+
+/// Durable record of every background job (the queue itself is BullMQ/Redis).
+/// The idempotency key guarantees a logical job is created once; handlers are
+/// written to be safe to replay.
+model JobRun {
+  id             String    @id @default(cuid())
+  companyId      String?
+  type           String
+  idempotencyKey String    @unique
+  payload        Json
+  status         JobStatus @default(QUEUED)
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5)
+  lastError      String?
+  result         Json?
+  runAfter       DateTime  @default(now())
+  queuedAt       DateTime  @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  replayCount    Int       @default(0)
+
+  @@index([status, queuedAt])
+  @@index([companyId, type])
+}
+
+/// Inbound provider webhook, stored before processing. Unique per provider
+/// event id, so retries and duplicates are recognized.
+model WebhookEvent {
+  id              String    @id @default(cuid())
+  companyId       String?
+  provider        String
+  externalEventId String
+  eventType       String
+  subjectRef      String?
+  occurredAt      DateTime
+  receivedAt      DateTime  @default(now())
+  /// RECEIVED | PROCESSED | DUPLICATE | STALE | IGNORED | FAILED
+  status          String    @default("RECEIVED")
+  payload         Json
+  error           String?
+  processedAt     DateTime?
+
+  @@unique([provider, externalEventId])
+  @@index([companyId, receivedAt])
+}
+
+model SignatureEnvelope {
+  id            String          @id @default(cuid())
+  companyId     String
+  transactionId String
+  provider      String
+  mode          IntegrationMode
+  externalId    String          @unique
+  /// CREATED | SENT | DELIVERED | COMPLETED | DECLINED | VOIDED
+  status        String          @default("CREATED")
+  subject       String
+  documentIds   Json
+  signerNames   Json
+  isSimulated   Boolean         @default(true)
+  lastEventAt   DateTime?
+  createdById   String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([companyId, transactionId])
+}
+
+model RecordingSubmission {
+  id               String          @id @default(cuid())
+  companyId        String
+  transactionId    String
+  provider         String
+  mode             IntegrationMode
+  externalId       String          @unique
+  /// SUBMITTED | ACCEPTED | RECORDED | REJECTED
+  status           String          @default("SUBMITTED")
+  documentIds      Json
+  instrumentNumber String?
+  recordedAt       DateTime?
+  isSimulated      Boolean         @default(true)
+  lastEventAt      DateTime?
+  createdById      String
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([companyId, transactionId])
+}
+
+model MessageTemplate {
+  id           String    @id @default(cuid())
+  companyId    String
+  key          String
+  name         String
+  kind         String
+  subject      String
+  body         String
+  approved     Boolean   @default(false)
+  approvedById String?
+  approvedAt   DateTime?
+  version      Int       @default(1)
+  updatedById  String?
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([companyId, key])
+}
+
+model AutomationRule {
+  id          String   @id @default(cuid())
+  companyId   String
+  key         String
+  name        String
+  /// DEADLINE_REMINDER | OVERDUE_ESCALATION | DOCUMENT_REQUEST | STATUS_UPDATE | READY_NOTIFICATION
+  type        String
+  enabled     Boolean  @default(false)
+  /// DRAFT_FOR_REVIEW | AUTO_SEND
+  mode        String   @default("DRAFT_FOR_REVIEW")
+  templateId  String?
+  config      Json     @default("{}")
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, key])
+}
+
+/// Every outbound email, whether drafted by a person, a rule or the assistant.
+/// Nothing leaves the system unless approved (or sent by an enabled rule in
+/// AUTO_SEND mode), external sending is on at both server and company level,
+/// and content checks pass.
+model OutboundMessage {
+  id                      String   @id @default(cuid())
+  companyId               String
+  transactionId           String?
+  ruleId                  String?
+  templateId              String?
+  channel                 String   @default("EMAIL")
+  recipientParticipantIds Json
+  recipientEmails         Json
+  suppressedRecipients    Json?
+  subject                 String
+  body                    String
+  /// DRAFT | PENDING_APPROVAL | APPROVED | SENDING | SENT | CAPTURED_DEMO | BLOCKED | SUPPRESSED | FAILED | CANCELLED
+  status                  String   @default("DRAFT")
+  blockedReason           String?
+  createdByType           String   @default("USER")
+  createdById             String?
+  approvalId              String?
+  idempotencyKey          String
+  provider                String?
+  providerMessageId       String?
+  sentAt                  DateTime?
+  error                   String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, transactionId, status])
+}

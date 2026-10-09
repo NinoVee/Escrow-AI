@@ -4,6 +4,7 @@ import { userCtx, type Ctx } from "@/server/context";
 import { createUserWithPassword } from "@/server/services/users";
 import { installDefaultTemplates } from "@/server/services/templates";
 import { installDefaultLedger } from "@/server/services/reconciliation";
+import { installDefaultAutomation } from "@/server/services/automation";
 import { createTransaction, type CreateTransactionInput } from "@/server/services/transactions";
 import { parseSettings } from "@/server/settings";
 import type { Role } from "@/generated/prisma/enums";
@@ -25,6 +26,7 @@ export async function makeCompany(name = "Test Escrow Co") {
   await db.$transaction(async (client) => {
     await installDefaultTemplates(client, company.id, admin.userId);
     await installDefaultLedger(client, company.id, { name: "Trust account", bankName: "Test Bank", last4: "0001" });
+    await installDefaultAutomation(client, company.id);
   });
   return { company, admin };
 }
